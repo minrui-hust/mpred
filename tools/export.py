@@ -1,7 +1,7 @@
 from mai.tools.export import main, parse_args
 
-import mdet.data
-import mdet.model
+import mpred.data
+import mpred.model
 
 r'''
 Evaluate model on evaluation set.

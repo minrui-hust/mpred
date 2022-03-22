@@ -1,4 +1,4 @@
-import mdet.data.datasets
+import mpred.data.datasets
 from mai.tools.dataset_summary import main, parse_args
 
 

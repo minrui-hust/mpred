@@ -1,5 +1,5 @@
-import mdet.data
-import mdet.model
+import mpred.data
+import mpred.model
 from mai.tools.eval import main, parse_args
 
 

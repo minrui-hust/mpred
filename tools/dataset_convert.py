@@ -1,7 +1,7 @@
 
 from mai.tools.dataset_convert import main, parse_args
 
-import mdet.data.datasets
+import mpred.data.datasets
 
 
 if __name__ == '__main__':

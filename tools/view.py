@@ -1,4 +1,4 @@
-import mdet.data
+import mpred.data
 from mai.tools.view import main, parse_args
 
 r'''
