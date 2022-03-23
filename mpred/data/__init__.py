@@ -1,3 +1,3 @@
-import mdet.data.codecs
-import mdet.data.datasets
-import mdet.data.transforms
+import mpred.data.codecs
+import mpred.data.datasets
+import mpred.data.transforms

@@ -1,6 +1,7 @@
 import torch
 from mai.utils import FI
 import mpred.model
+import mpred.data
 
 # global config
 ############################
@@ -178,18 +179,26 @@ model = dict(
         },
     ),
 )
-
 model = FI.create(model)
 
-batch = dict(
-    input=dict(
-        agent=torch.rand((2, 4, 19, 4), dtype=torch.float32),
-        lane=torch.rand((2, 8, 9, 7), dtype=torch.float32),
-        pos=torch.rand((2, 4, 2), dtype=torch.float32),
-        agent_num=torch.full((2,), 4, dtype=torch.int32),
-        lane_num=torch.full((2,), 8, dtype=torch.int32),
-    )
+dataset = dict(
+    type='ArgoPredDataset',
+    info_path='/data/dataset/argoverse/prediction/val_info.pkl',
+    load_opt=dict(
+        map_path='/data/dataset/argoverse/prediction/map_info.pkl',
+        obs_len=20,
+        pred_len=30,
+    ),
+    filters=[],
+    transforms=[
+        dict(type='Normlize'),
+    ],
+    codec=None,
 )
+dataset = FI.create(dataset)
+
+for i in range(len(dataset)):
+    dataset.plot(dataset[i])
 
 out = model(batch)
 print(out['traj'][0][0])
