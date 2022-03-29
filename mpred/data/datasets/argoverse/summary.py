@@ -49,6 +49,7 @@ def summary_data(root_path, split, am, obs_len, obj_radius, lane_radius, num_wor
     info_list = []
     for res in results:
         info_list.extend(res)
+        del res # release memory
 
     io.dump(info_list, os.path.join(root_path, f'{split}_info.pkl'))
 
@@ -102,7 +103,7 @@ def summary_map(root_path):
             dict[city_name].append(lane_nd)
             lane_id2idx[city_name][lane_id] = i
 
-        dict[city_name] = np.stack(dict[city_name], axis=0)
+        dict[city_name] = np.stack(dict[city_name], axis=0).astype(np.float32)
 
     io.dump([dict, lane_id2idx], os.path.join(root_path, 'map_info.pkl'))
     for city, lane in dict.items():
@@ -113,7 +114,7 @@ def summary_map(root_path):
 
 def process_dataframe(df: pd.DataFrame, am: ArgoverseMap, name, obs_len=20, obj_radius=56, lane_radius=65):
     df['TIMESTAMP'] -= np.min(df['TIMESTAMP'].values)
-    seq_ts = np.unique(df['TIMESTAMP'].values).tolist()
+    seq_ts = np.unique(df['TIMESTAMP'].values)
     ts2idx = {ts: i for i, ts in enumerate(seq_ts)}
 
     city_name = df['CITY_NAME'].iloc[0]
@@ -138,19 +139,19 @@ def process_dataframe(df: pd.DataFrame, am: ArgoverseMap, name, obs_len=20, obj_
             continue
 
         obj_traj = np.zeros((len(seq_ts), 4), dtype=np.float32)
+        obj_traj[:, 2] = agent_traj[:, 2]  # timestamp
         obj_cord = obj_df[['X', 'Y']].values
         obj_ts = obj_df[['TIMESTAMP']].values.squeeze(1).tolist()
         for ts, cord in zip(obj_ts, obj_cord):
             obj_traj[ts2idx[ts], :2] = cord
-            obj_traj[ts2idx[ts], 2] = ts
             obj_traj[ts2idx[ts], 3] = 1.0
         agent_traj_list.append(obj_traj)
 
-        # filter object too far away
-        cur_idx = min(obs_len-1, ts2idx[obj_ts[-1]])
-        obj_pos = obj_traj[cur_idx, :2]
-        if np.linalg.norm(agent_pos-obj_pos) > obj_radius:
-            continue
+        # do pad
+        start_idx = ts2idx[obj_ts[0]]   # include
+        end_idx = ts2idx[obj_ts[-1]]+1  # exclude
+        obj_traj[:start_idx, :2] = obj_traj[start_idx, :2]  # left
+        obj_traj[end_idx:, :2] = obj_traj[end_idx-1, :2]  # right
 
     agent_traj_np = np.stack(agent_traj_list, axis=0)
 

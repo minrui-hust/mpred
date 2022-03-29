@@ -24,6 +24,8 @@ class MMTrans(BaseModule):
         super().__init__()
 
         self.hparam = hparam
+        self.lane_enable = hparam['lane_enable']
+        self.social_enable = hparam['social_enable']
         model_dim = hparam['model_dim']
         pos_dim = hparam['pos_dim']
         dist_dim = hparam['dist_dim']
@@ -32,37 +34,38 @@ class MMTrans(BaseModule):
         K = hparam['num_queries']
         dropout = hparam['dropout']
 
+        self.agent_emb = LinearEmbedding(agent_dim, model_dim)
+        self.agent_pos_enc = PositionalEncoding(model_dim, dropout)
         self.agent_enc = FI.create(agent_enc)
         self.agent_dec = FI.create(agent_dec)
-        self.lane_net = FI.create(lane_net)
-        self.lane_enc = FI.create(lane_enc)
-        self.lane_dec = FI.create(lane_dec)
-        self.social_enc = FI.create(social_enc)
-        self.head = FI.create(head)
+        self.agent_mlp = FI.create(dict(type='MLP',
+                                        in_channels=model_dim + pos_dim,
+                                        hidden_channels=model_dim,
+                                        out_channels=model_dim))
+
+        if self.lane_enable:
+            self.lane_emb = LinearEmbedding(lane_enc_dim, model_dim)
+            self.lane_net = FI.create(lane_net)
+            self.lane_enc = FI.create(lane_enc)
+            self.lane_dec = FI.create(lane_dec)
+            self.lane_mlp = FI.create(dict(type='MLP',
+                                           in_channels=K * model_dim,
+                                           hidden_channels=dist_dim,
+                                           out_channels=dist_dim))
+
+        if self.social_enable:
+            self.social_enc = FI.create(social_enc)
+            self.social_mlp = FI.create(dict(type='MLP',
+                                             in_channels=dist_dim + pos_dim,
+                                             hidden_channels=model_dim,
+                                             out_channels=model_dim))
 
         self.pos_mlp = FI.create(dict(type='MLP',
                                       in_channels=2,
                                       hidden_channels=pos_dim,
                                       out_channels=pos_dim))
 
-        self.agent_mlp = FI.create(dict(type='MLP',
-                                        in_channels=model_dim + pos_dim,
-                                        hidden_channels=model_dim,
-                                        out_channels=model_dim))
-
-        self.lane_mlp = FI.create(dict(type='MLP',
-                                       in_channels=K * model_dim,
-                                       hidden_channels=dist_dim,
-                                       out_channels=dist_dim))
-
-        self.social_mlp = FI.create(dict(type='MLP',
-                                         in_channels=dist_dim + pos_dim,
-                                         hidden_channels=model_dim,
-                                         out_channels=model_dim))
-
-        self.lane_emb = LinearEmbedding(lane_enc_dim, model_dim)
-        self.agent_emb = LinearEmbedding(agent_dim, model_dim)
-        self.agent_pos_enc = PositionalEncoding(model_dim, dropout)
+        self.head = FI.create(head)
 
         self.query = nn.Embedding(K, model_dim)
 
@@ -89,14 +92,13 @@ class MMTrans(BaseModule):
         agent_mask = construct_mask(agent_num, A, inverse=True)  # (B, A)
         lane_mask = construct_mask(lane_num, L, inverse=True)  # (B, L)
 
+        # fusion agent
         agent = self.agent_emb(agent)
+
         agent = self.agent_pos_enc(agent)  # (B, A, 19, model_dim)
+
         # (B*A, 19, model_dim)
         agent = self.agent_enc(agent.view(-1, *agent.shape[-2:]))
-
-        lane = self.lane_net(lane)  # (B, L, 64)
-        lane = self.lane_emb(lane)  # (B, L, model_dim)
-        lane = self.lane_enc(lane, mask=lane_mask)  # (B, L, model_dim)
 
         # (B, A, model_dim)
         pos = self.pos_mlp(pos)
@@ -110,23 +112,40 @@ class MMTrans(BaseModule):
 
         # (B*A, K, pos_dim)
         pos_expand = pos.view(-1, 1, pos.shape[-1]).expand(-1, K, -1)
-        lane_in = self.agent_mlp(
+        agent_out = self.agent_mlp(
             torch.cat([agent_out, pos_expand], dim=-1))  # (B*A, K, model_dim)
 
-        # (B*A, K, model_dim)
-        lane_out = self.lane_dec(lane_in, torch.repeat_interleave(
-            lane, A, dim=0, output_size=B*A), mask=torch.repeat_interleave(lane_mask, A, dim=0, output_size=B*A))
+        # fusion lane
+        if self.lane_enable:
+            lane = self.lane_net(lane)  # (B, L, 64)
+            print(f'a:\n {lane[0]}')
 
-        # (B, A, model_dim)
-        social_in = self.lane_mlp(lane_out.view(B, A, -1))
-        social_in = self.social_mlp(torch.cat([social_in, pos], dim=-1))
+            lane = self.lane_emb(lane)  # (B, L, model_dim)
+            print(f'b:\n {lane[0]}')
 
-        # (B, A, model_dim)
-        social_out = self.social_enc(social_in, mask=agent_mask)
+            lane = self.lane_enc(lane, mask=lane_mask)  # (B, L, model_dim)
+            print(f'c:\n {lane[0]}')
 
-        # (B, A, K, model_dim*2)
-        head_in = torch.cat([social_out.unsqueeze(
-            2).expand(-1, -1, K, -1), lane_out.view(B, A, K, -1)], dim=-1)
+            # (B*A, K, model_dim)
+            lane_out = self.lane_dec(agent_out, torch.repeat_interleave(
+                lane, A, dim=0, output_size=B*A), mask=torch.repeat_interleave(lane_mask, A, dim=0, output_size=B*A))
+
+        if self.social_enable:
+            # (B, A, model_dim)
+            social_in = self.lane_mlp(lane_out.view(B, A, -1))
+            social_in = self.social_mlp(torch.cat([social_in, pos], dim=-1))
+
+            # (B, A, model_dim)
+            social_out = self.social_enc(social_in, mask=agent_mask)
+
+        if not self.lane_enable and not self.social_enable:
+            head_in = agent_out.view(B, A, K, -1)
+        elif not self.social_enable:
+            head_in = lane_out.view(B, A, K, -1)
+        else:
+            # (B, A, K, model_dim*2)
+            head_in = torch.cat([social_out.unsqueeze(
+                2).expand(-1, -1, K, -1), lane_out.view(B, A, K, -1)], dim=-1)
 
         head_out = self.head(head_in)
 

@@ -1,11 +1,17 @@
-import torch
-from mai.utils import FI
-import mpred.model
-import mpred.data
-from torch.utils.data import DataLoader
+from copy import deepcopy as _deepcopy
+from mai.utils import GCFG
+
+# global config maybe override by command line
+batch_size = GCFG['batch_size'] or 32  # different from original, which is 4
+num_workers = GCFG['num_workers'] or 2
+max_epochs = GCFG['max_epochs'] or 36
+lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
+dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
 ############################
+lane_enable=True
+social_enable=False
 model_dim = 128
 pos_dim = 64
 dist_dim = 128
@@ -22,9 +28,11 @@ pred_win = 30
 
 # model config
 ############################
-model = dict(
+model_train = dict(
     type='MMTrans',
     hparam=dict(
+        lane_enable=lane_enable,
+        social_enable=social_enable,
         model_dim=model_dim,
         pos_dim=pos_dim,
         dist_dim=dist_dim,
@@ -173,16 +181,22 @@ model = dict(
     ),
     head=dict(
         type='MLPHead',
-        in_channels=model_dim*2,
+        in_channels=model_dim,
         heads={
             'traj': (model_dim, pred_win*2),
             'score': (model_dim, 1),
         },
     ),
 )
-model = FI.create(model)
 
-codec = dict(
+model_eval = _deepcopy(model_train)
+
+model_export = _deepcopy(model_eval)
+
+
+# codecs config
+############################
+codec_train = dict(
     type='MMTransCodec',
     encode_cfg=dict(
         encode_data=True,
@@ -197,32 +211,93 @@ codec = dict(
         }
     ),
 )
-codec = FI.create(codec)
 
-dataset = dict(
-    type='ArgoPredDataset',
-    info_path='/data/dataset/argoverse/prediction/val_info.pkl',
-    load_opt=dict(
-        map_path='/data/dataset/argoverse/prediction/map_info.pkl',
-        obs_len=20,
-        pred_len=30,
+codec_eval = _deepcopy(codec_train)
+
+codec_export = _deepcopy(codec_eval)
+codec_export['encode_cfg']['encode_anno'] = False
+
+
+dataloader_train = dict(
+    batch_size=batch_size,
+    num_workers=num_workers,
+    shuffle=True,
+    pin_memory=False,
+    dataset=dict(
+        type='ArgoPredDataset',
+        info_path=f'{dataset_root}/train_info.pkl',
+        load_opt=dict(
+            map_path=f'{dataset_root}/map_info.pkl',
+            obs_len=20,
+            pred_len=30,
+        ),
+        filters=[],
+        transforms=[
+            dict(type='Normlize'),
+        ],
     ),
-    filters=[],
-    transforms=[
-        dict(type='Normlize'),
-    ],
 )
-dataset = FI.create(dataset)
-dataset.codec = codec
 
-#  for i in range(len(dataset)):
-#      data = dataset[i]
-#      dataset.plot(data)
-#      codec.plot(data)
+dataloader_eval = _deepcopy(dataloader_train)
+dataloader_eval['shuffle'] = False
+dataloader_eval['dataset']['info_path'] = f'{dataset_root}/val_info.pkl'
+dataloader_eval['dataset']['filters'] = []
+dataloader_eval['dataset']['transforms'] = [
+    dict(type='Normlize'),
+]
 
-dl = DataLoader(dataset, 2, collate_fn=codec.collater())
+dataloader_export = _deepcopy(dataloader_eval)
 
-for batch in dl:
-    out = model(batch)
-    loss_dict = codec.loss(out, batch)
-    print(loss_dict)
+
+# fit config
+############################
+fit = dict(
+    max_epochs=max_epochs,
+    optimizer=dict(
+        type='AdamW',
+        weight_decay=0.01,
+        betas=(0.9, 0.99),
+    ),
+    scheduler=dict(
+        type='OneCycleLR',
+        max_lr=0.0006 / 16 * batch_size * lr_scale,
+        base_momentum=0.85,
+        max_momentum=0.95,
+        div_factor=10.0,
+        pct_start=0.4,
+    ),
+    grad_clip=dict(type='norm', value=35),
+)
+
+
+runtime = dict(
+    train=dict(
+        logger=[
+            dict(type='TensorBoardLogger', flush_secs=15),
+            dict(type='CSVLogger', flush_logs_every_n_steps=50),
+        ],
+    ),
+    eval=dict(evaluate_min_epoch=max_epochs-1),
+    test=dict(),
+)
+
+
+# collect config
+#################################
+model = dict(
+    train=model_train,
+    eval=model_eval,
+    export=model_export,
+)
+
+codec = dict(
+    train=codec_train,
+    eval=codec_eval,
+    export=codec_export,
+)
+
+data = dict(
+    train=dataloader_train,
+    eval=dataloader_eval,
+    export=dataloader_export,
+)

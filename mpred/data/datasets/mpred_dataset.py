@@ -59,12 +59,17 @@ class MPredDataset(BaseDataset):
             L = sample['meta']['pred_len']
             c = np.arange(L) / (L-1)
 
-            cm = plt.cm.get_cmap('spring')
+            cm = plt.cm.get_cmap('gray')
             traj = sample['anno'].trajs[0]
             plt.scatter(traj[:, 0], traj[:, 1], s=32, c=cm(c), marker='H')
 
         if show_pred and 'pred' in sample:
-            # plot pred traj
-            pass
+            L = sample['meta']['pred_len']
+            c = np.arange(L) / (L-1)
+
+            cm = plt.cm.get_cmap('spring')
+            for traj, score in zip(sample['pred'].trajs, sample['pred'].scores):
+                plt.scatter(traj[:, 0], traj[:, 1], s=32, c=cm(c), marker='H')
+                plt.text(traj[-1, 0], traj[-1,1], str(score))
 
         plt.show()
