@@ -118,13 +118,10 @@ class MMTrans(BaseModule):
         # fusion lane
         if self.lane_enable:
             lane = self.lane_net(lane)  # (B, L, 64)
-            print(f'a:\n {lane[0]}')
 
             lane = self.lane_emb(lane)  # (B, L, model_dim)
-            print(f'b:\n {lane[0]}')
 
             lane = self.lane_enc(lane, mask=lane_mask)  # (B, L, model_dim)
-            print(f'c:\n {lane[0]}')
 
             # (B*A, K, model_dim)
             lane_out = self.lane_dec(agent_out, torch.repeat_interleave(
