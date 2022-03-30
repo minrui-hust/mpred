@@ -99,7 +99,7 @@ model_train = dict(
         type='LaneNet',
         in_channels=7,
         hidden_unit=64,
-        layer_num=2,
+        layer_num=4,
     ),
     lane_enc=dict(
         type='TransformerEncoder',
