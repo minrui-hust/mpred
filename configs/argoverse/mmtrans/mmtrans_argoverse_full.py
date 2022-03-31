@@ -10,8 +10,8 @@ dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
 ############################
-lane_enable=True
-social_enable=False
+lane_enable = True
+social_enable = True
 model_dim = 128
 pos_dim = 64
 dist_dim = 128
@@ -181,7 +181,7 @@ model_train = dict(
     ),
     head=dict(
         type='MLPHead',
-        in_channels=model_dim,
+        in_channels=model_dim*2,
         heads={
             'traj': (model_dim, pred_win*2),
             'score': (model_dim, 1),

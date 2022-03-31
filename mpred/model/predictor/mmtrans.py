@@ -48,17 +48,17 @@ class MMTrans(BaseModule):
             self.lane_net = FI.create(lane_net)
             self.lane_enc = FI.create(lane_enc)
             self.lane_dec = FI.create(lane_dec)
-            self.lane_mlp = FI.create(dict(type='MLP',
-                                           in_channels=K * model_dim,
-                                           hidden_channels=dist_dim,
-                                           out_channels=dist_dim))
 
         if self.social_enable:
-            self.social_enc = FI.create(social_enc)
+            self.social_emb = FI.create(dict(type='MLP',
+                                             in_channels=K * model_dim,
+                                             hidden_channels=dist_dim,
+                                             out_channels=dist_dim))
             self.social_mlp = FI.create(dict(type='MLP',
                                              in_channels=dist_dim + pos_dim,
                                              hidden_channels=model_dim,
                                              out_channels=model_dim))
+            self.social_enc = FI.create(social_enc)
 
         self.pos_mlp = FI.create(dict(type='MLP',
                                       in_channels=2,
@@ -129,7 +129,7 @@ class MMTrans(BaseModule):
 
         if self.social_enable:
             # (B, A, model_dim)
-            social_in = self.lane_mlp(lane_out.view(B, A, -1))
+            social_in = self.social_emb(lane_out.view(B, A, -1))
             social_in = self.social_mlp(torch.cat([social_in, pos], dim=-1))
 
             # (B, A, model_dim)
