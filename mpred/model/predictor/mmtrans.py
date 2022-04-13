@@ -124,8 +124,79 @@ class MMTrans(BaseModule):
             lane = self.lane_enc(lane, mask=lane_mask)  # (B, L, model_dim)
 
             # (B*A, K, model_dim)
-            lane_out = self.lane_dec(agent_out, torch.repeat_interleave(
-                lane, A, dim=0, output_size=B*A), mask=torch.repeat_interleave(lane_mask, A, dim=0, output_size=B*A))
+            lane_expanded = torch.repeat_interleave(
+                lane, A, dim=0, output_size=B*A)
+            lane_mask_expanded = torch.repeat_interleave(
+                lane_mask, A, dim=0, output_size=B*A)
+            lane_out = self.lane_dec(
+                agent_out, lane_expanded, mask=lane_mask_expanded)
+
+        if self.social_enable:
+            # (B, A, model_dim)
+            social_in = self.social_emb(lane_out.view(B, A, -1))
+            social_in = self.social_mlp(torch.cat([social_in, pos], dim=-1))
+
+            # (B, A, model_dim)
+            social_out = self.social_enc(social_in, mask=agent_mask)
+
+        if not self.lane_enable and not self.social_enable:
+            head_in = agent_out.view(B, A, K, -1)
+        elif not self.social_enable:
+            head_in = lane_out.view(B, A, K, -1)
+        else:
+            # (B, A, K, model_dim*2)
+            head_in = torch.cat([social_out.unsqueeze(
+                2).expand(-1, -1, K, -1), lane_out.view(B, A, K, -1)], dim=-1)
+
+        head_out = self.head(head_in)
+
+        return head_out
+
+    def forward_export(self, agent, lane, pos, agent_num, lane_num):
+        # batch_size, max_agent_num, max_lane_num
+        B, A, L, K = agent.shape[0], agent.shape[1], lane.shape[1], self.hparam['num_queries']
+
+        agent_mask = construct_mask(agent_num, A, inverse=True)  # (B, A)
+        lane_mask = construct_mask(lane_num, L, inverse=True)  # (B, L)
+
+        # fusion agent
+        agent = self.agent_emb(agent)
+
+        agent = self.agent_pos_enc(agent)  # (B, A, 19, model_dim)
+
+        # (B*A, 19, model_dim)
+        agent = self.agent_enc(agent.view(-1, *agent.shape[-2:]))
+
+        # (B, A, model_dim)
+        pos = self.pos_mlp(pos)
+
+        # (B*A, K, model_dim)
+        query_batches = self.query.weight.unsqueeze(
+            0).expand(agent.shape[0], -1, -1)
+
+        # (B*A, K, model_dim)
+        agent_out = self.agent_dec(query_batches, agent)
+
+        # (B*A, K, pos_dim)
+        pos_expand = pos.view(-1, 1, pos.shape[-1]).expand(-1, K, -1)
+        agent_out = self.agent_mlp(
+            torch.cat([agent_out, pos_expand], dim=-1))  # (B*A, K, model_dim)
+
+        # fusion lane
+        if self.lane_enable:
+            lane = self.lane_net(lane)  # (B, L, 64)
+
+            lane = self.lane_emb(lane)  # (B, L, model_dim)
+
+            lane = self.lane_enc(lane, mask=lane_mask)  # (B, L, model_dim)
+
+            # (B*A, K, model_dim)
+            lane_expanded = lane.unsqueeze(
+                1).expand(-1, A, -1, -1).reshape(B*A, L, -1)
+            lane_mask_expanded = lane_mask.unsqueeze(
+                1).expand(-1, A, -1).reshape(B*A, L)
+            lane_out = self.lane_dec(
+                agent_out, lane_expanded, mask=lane_mask_expanded)
 
         if self.social_enable:
             # (B, A, model_dim)

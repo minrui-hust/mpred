@@ -11,7 +11,7 @@ dataset_root = GCFG['dataset_root'] or '/data/waymo'
 # global config
 ############################
 lane_enable = True
-social_enable = True
+social_enable = False
 model_dim = 128
 pos_dim = 64
 dist_dim = 128
@@ -24,7 +24,7 @@ agent_layers = 2
 lane_layers = 2
 social_layers = 2
 pred_win = 30
-obj_radius=50
+obj_radius = 50
 
 
 # model config
@@ -182,7 +182,7 @@ model_train = dict(
     ),
     head=dict(
         type='MLPHead',
-        in_channels=model_dim*2,
+        in_channels=model_dim,
         heads={
             'traj': (model_dim, pred_win*2),
             'score': (model_dim, 1),
@@ -235,7 +235,8 @@ dataloader_train = dict(
         filters=[],
         transforms=[
             dict(type='ObjectRangeFilter', obj_radius=obj_radius),
-            dict(type='Normlize'),
+            dict(type='MpredMirrorFlip'),
+            dict(type='MpredGlobalTransform', translation_std=[1, 1])
         ],
     ),
 )
@@ -246,7 +247,7 @@ dataloader_eval['dataset']['info_path'] = f'{dataset_root}/val_info.pkl'
 dataloader_eval['dataset']['filters'] = []
 dataloader_eval['dataset']['transforms'] = [
     dict(type='ObjectRangeFilter', obj_radius=obj_radius),
-    dict(type='Normlize'),
+    dict(type='Normlize', orient=False),
 ]
 
 dataloader_export = _deepcopy(dataloader_eval)
@@ -267,7 +268,7 @@ fit = dict(
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
-        pct_start=0.4,
+        pct_start=0.3,
     ),
     grad_clip=dict(type='norm', value=0.1),
 )

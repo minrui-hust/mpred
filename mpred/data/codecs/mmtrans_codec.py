@@ -73,7 +73,15 @@ class MMTransCodec(BaseCodec):
         return pred_list
 
     def decode_export(self, output, batch=None):
-        pass
+        L = 30
+
+        traj = output['traj'][:, 0]
+        traj = traj.reshape(*traj.shape[:-1], L, 2)  # (B, K, L, 2)
+
+        score = torch.softmax(
+            output['score'][:, 0].squeeze(-1), dim=1)  # (B, K)
+
+        return traj, score
 
     def decode_trt(self, output, batch=None):
         pass
@@ -217,4 +225,15 @@ class MMTransCodec(BaseCodec):
         plt.show()
 
     def export_info(self, batch):
-        pass
+        agent = batch['input']['agent']  # (B, A, 19, 4)
+        lane = batch['input']['lane']  # (B, L, 9, 7)
+        pos = batch['input']['pos']  # (B, A, 2)
+        agent_num = batch['input']['agent_num']  # (B)
+        lane_num = batch['input']['lane_num']  # (B)
+
+        input = (agent, lane, pos, agent_num, lane_num, )
+        input_name = ['agent', 'lane', 'pos', 'agent_num', 'lane_num']
+        output_name = ['traj', 'score']
+        dynamic_axes = {}
+
+        return input, input_name, output_name, dynamic_axes
