@@ -10,8 +10,8 @@ dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
 ############################
-lane_enable=True
-social_enable=False
+lane_enable = True
+social_enable = False
 model_dim = 128
 pos_dim = 64
 dist_dim = 128
@@ -264,7 +264,7 @@ fit = dict(
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
-        pct_start=0.4,
+        pct_start=0.3,
     ),
     grad_clip=dict(type='norm', value=0.1),
 )
