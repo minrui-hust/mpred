@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from mpred.core.annotation_pred import AnnotationTrajPred
+from functools import partial
 
 
 @FI.register
@@ -27,12 +28,16 @@ class MMTransCodec(BaseCodec):
         object = sample['data']['agent'][1:]
         valid_mask = object[:, -1, -1] > 0
         object = object[valid_mask]
+        if len(object) > 64:
+            object = object[:64]
         object_num = np.array(len(object), dtype=np.int32)  # (H, 4)
 
         # encode lane
         lane = sample['data']['lane']
         lane = np.concatenate(
             [lane[:, :-1, :2], lane[:, 1:, :]], axis=-1)  # vectorize
+        if len(lane) > 128:
+            lane = lane[:128]
         lane_num = np.array(len(lane), dtype=np.int32)
 
         sample['input'] = dict(
@@ -63,25 +68,29 @@ class MMTransCodec(BaseCodec):
 
         pred_list = []
         for i in range(len(traj)):
-            pred = AnnotationTrajPred(
-                trajs=traj[i].numpy(), scores=score[i].numpy())
-            pred_list.append(pred)
-
+            pred_list.append(AnnotationTrajPred(
+                trajs=traj[i].numpy(), scores=score[i].numpy()))
         return pred_list
 
     def decode_export(self, output, batch=None):
-        L = 30
 
-        traj = output['traj'][:, 0]
-        traj = traj.reshape(*traj.shape[:-1], L, 2)  # (B, K, L, 2)
+        traj = output['traj']
+        B, K, L = traj.shape[0], traj.shape[1], int(traj.shape[2]/2)
 
-        score = torch.softmax(
-            output['score'][:, 0].squeeze(-1), dim=1)  # (B, K)
+        traj = traj.reshape(B, K, L, 2)
+
+        score = torch.softmax(output['score'].squeeze(-1), dim=1)  # (B, K)
 
         return traj, score
 
     def decode_trt(self, output, batch=None):
-        pass
+        traj_list = output['traj'].cpu()
+        score_list = output['score'].cpu()
+        pred_list = []
+        for traj, score in zip(traj_list, score_list):
+            pred_list.append(AnnotationTrajPred(
+                trajs=traj.numpy(), scores=score.numpy()))
+        return pred_list
 
     def loss(self, output, batch):
         pred_traj = output['traj']
@@ -112,8 +121,8 @@ class MMTransCodec(BaseCodec):
         return dict(loss=loss, traj_loss=traj_loss, score_loss=score_loss)
 
     def collater(self):
-        def pad_func(data, data_list):
-            A = max([len(d) for d in data_list])
+        def pad_func(data, data_list, size=None):
+            A = size or max([len(d) for d in data_list])
             a = len(data)
             pad = [0, 0] * data.dim()
             pad[-1] = A-a
@@ -129,8 +138,8 @@ class MMTransCodec(BaseCodec):
 
             # rules for input
             '.input.agent': dict(type='stack'),
-            '.input.object': dict(type='stack', pad_func=pad_func),
-            '.input.lane': dict(type='stack', pad_func=pad_func),
+            '.input.lane': dict(type='stack', pad_func=partial(pad_func, size=128)),
+            '.input.object': dict(type='stack', pad_func=partial(pad_func, size=64)),
             '.input.object_num': dict(type='stack'),
             '.input.lane_num': dict(type='stack'),
 
@@ -208,14 +217,14 @@ class MMTransCodec(BaseCodec):
         plt.show()
 
     def export_info(self, batch):
-        agent = batch['input']['agent'][:, [0], :, :]  # (B, A, 19, 4)
+        agent = batch['input']['agent']  # (B, 19, 4)
         lane = batch['input']['lane']  # (B, L, 9, 7)
-        pos = batch['input']['pos'][:, [0], :]  # (B, A, 2)
-        agent_num = batch['input']['agent_num']  # (B)
+        object = batch['input']['object']  # (B, O, 20, 4)
+        object_num = batch['input']['object_num']  # (B)
         lane_num = batch['input']['lane_num']  # (B)
 
-        input = (agent, lane, pos, agent_num, lane_num, )
-        input_name = ['agent', 'lane', 'pos', 'agent_num', 'lane_num']
+        input = (agent, lane, object, object_num, lane_num, )
+        input_name = ['agent', 'lane', 'object', 'object_num', 'lane_num']
         output_name = ['traj', 'score']
         dynamic_axes = {}
 
