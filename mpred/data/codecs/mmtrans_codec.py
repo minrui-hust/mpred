@@ -16,19 +16,18 @@ class MMTransCodec(BaseCodec):
             log_target=True, reduction='batchmean')
 
     def encode_data(self, sample, info):
-        # encode agent
-        agent = sample['data']['agent']
-        mask = agent[:, :, -1]
-        last_idx = []
-        for m in mask:
-            last_idx.append(np.nonzero(m)[0].max())
-        last_idx = np.array(last_idx, dtype=np.int32)
 
-        pos = agent[:, :, :2]
-        delta = pos[:, :-1] - pos[:, 1:]
-        agent = np.concatenate([delta, agent[:, :-1, 2:]], axis=-1)
-        pos = pos[:, -1]
-        agent_num = np.array(len(agent), dtype=np.int32)
+        # encode agent
+        agent = sample['data']['agent'][0]  # (H, 4)
+        pos = agent[:, :2]
+        delta = pos[:-1] - pos[1:]
+        agent = np.concatenate([delta, agent[:-1, 2:]], axis=-1)  # (H-1, 4)
+
+        # encode object
+        object = sample['data']['agent'][1:]
+        valid_mask = object[:, -1, -1] > 0
+        object = object[valid_mask]
+        object_num = np.array(len(object), dtype=np.int32)  # (H, 4)
 
         # encode lane
         lane = sample['data']['lane']
@@ -38,13 +37,11 @@ class MMTransCodec(BaseCodec):
 
         sample['input'] = dict(
             agent=torch.from_numpy(agent),
-            pos=torch.from_numpy(pos),
+            object=torch.from_numpy(object),
             lane=torch.from_numpy(lane),
-            agent_num=torch.from_numpy(agent_num),
+            object_num=torch.from_numpy(object_num),
             lane_num=torch.from_numpy(lane_num),
         )
-
-        sample['meta']['last_idx'] = last_idx
 
     def encode_anno(self, sample, info):
         traj = sample['anno'].trajs[0]
@@ -57,12 +54,12 @@ class MMTransCodec(BaseCodec):
         output --> pred
         '''
 
-        L = batch['meta'][0]['pred_len']
+        traj = output['traj']
+        B, K, L = traj.shape[0], traj.shape[1], int(traj.shape[2]/2)
 
-        traj = output['traj'][:, 0]
-        traj = traj.reshape(*traj.shape[:-1], L, 2).cpu()  # B, K, L, 2
+        traj = traj.reshape(B, K, L, 2).cpu()  # B, K, L, 2
 
-        score = torch.softmax(output['score'][:, 0].squeeze(-1), dim=1).cpu()
+        score = torch.softmax(output['score'].squeeze(-1), dim=1).cpu()
 
         pred_list = []
         for i in range(len(traj)):
@@ -87,8 +84,9 @@ class MMTransCodec(BaseCodec):
         pass
 
     def loss(self, output, batch):
-        pred_traj = output['traj'][:, 0]
-        (B, K), L = pred_traj.shape[:2], int(pred_traj.shape[2]/2)
+        pred_traj = output['traj']
+        B, K, L = pred_traj.shape[0], pred_traj.shape[1], int(
+            pred_traj.shape[2]/2)
 
         pred_traj = pred_traj.view(B, K, L, 2)
 
@@ -105,7 +103,7 @@ class MMTransCodec(BaseCodec):
             pred_traj, gt_traj, delta=self.loss_cfg['delta'])
 
         gt_score = F.one_hot(min_idx, K).float()
-        pred_score = F.sigmoid(output['score'][:, 0].squeeze(-1))  # B, K
+        pred_score = F.sigmoid(output['score'].squeeze(-1))  # B, K
         score_loss = F.cross_entropy(pred_score, gt_score)
 
         loss = self.loss_cfg['wgt']['traj'] * traj_loss + \
@@ -130,10 +128,10 @@ class MMTransCodec(BaseCodec):
             '.anno': dict(type='append'),
 
             # rules for input
-            '.input.agent': dict(type='stack', pad_func=pad_func),
-            '.input.pos': dict(type='stack', pad_func=pad_func),
+            '.input.agent': dict(type='stack'),
+            '.input.object': dict(type='stack', pad_func=pad_func),
             '.input.lane': dict(type='stack', pad_func=pad_func),
-            '.input.agent_num': dict(type='stack'),
+            '.input.object_num': dict(type='stack'),
             '.input.lane_num': dict(type='stack'),
 
             # rules for gt
@@ -160,6 +158,7 @@ class MMTransCodec(BaseCodec):
         plt.grid()
 
         if show_input and 'input' in sample:
+            # plot lane
             lane = sample['input']['lane']
             for l in lane:
                 s = l[:, :2]
@@ -173,39 +172,23 @@ class MMTransCodec(BaseCodec):
 
             # plot obj
             cm = plt.cm.get_cmap('winter')
-            object = sample['input']['agent'][1:]
-            object_pos = sample['input']['pos'][1:]
-            last_idx = sample['meta']['last_idx'][1:]
-            for obj, pos, last in zip(object, object_pos, last_idx):
-                d = obj[:, :2]
-                d = torch.cat([d, pos.unsqueeze(0)], dim=0)
-                # reverse cumsum
-                p = d + torch.sum(d, dim=0, keepdims=True) - \
-                    torch.cumsum(d, dim=0)
-
-                m = obj[:, -1]
-                m = F.pad(m, (0, 1), value=0)
-                m[last] = 1
-                mask = m > 0
-
+            object = sample['input']['object']
+            for obj in object:
+                p = obj[:, :2]
+                mask = obj[:, -1] > 0
                 p = p[mask]
-
                 plt.scatter(p[:, 0], p[:, 1], s=28, c=cm(c[mask]))
 
             # plot agent
             cm = plt.cm.get_cmap('autumn')
-            agent = sample['input']['agent'][0]
-            agent_pos = sample['input']['pos'][0]
-            last_idx = sample['meta']['last_idx'][0]
+            agent = sample['input']['agent']
             d = agent[:, :2]
-            d = torch.cat([d, agent_pos.unsqueeze(0)], dim=0)
+            d = torch.cat([d, torch.zeros(1, 2)], dim=0)
             # reverse cumsum
             p = d + torch.sum(d, dim=0, keepdims=True) - \
                 torch.cumsum(d, dim=0)
 
-            m = agent[:, -1]
-            m = F.pad(m, (0, 1), value=0)
-            m[last_idx] = 1
+            m = F.pad(agent[:, -1], (0, 1), value=1)
             mask = m > 0
 
             p = p[mask]
@@ -225,9 +208,9 @@ class MMTransCodec(BaseCodec):
         plt.show()
 
     def export_info(self, batch):
-        agent = batch['input']['agent']  # (B, A, 19, 4)
+        agent = batch['input']['agent'][:, [0], :, :]  # (B, A, 19, 4)
         lane = batch['input']['lane']  # (B, L, 9, 7)
-        pos = batch['input']['pos']  # (B, A, 2)
+        pos = batch['input']['pos'][:, [0], :]  # (B, A, 2)
         agent_num = batch['input']['agent_num']  # (B)
         lane_num = batch['input']['lane_num']  # (B)
 
