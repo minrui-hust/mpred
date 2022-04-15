@@ -7,6 +7,7 @@ import math
 from mai.utils import FI
 from mai.model import BaseModule
 from mai.model.utils.construct_mask import construct_mask
+from mai.utils.misc import is_nan_or_inf
 
 
 @FI.register
@@ -18,18 +19,21 @@ class MMTrans(BaseModule):
                  lane_net,
                  lane_enc,
                  lane_dec,
-                 social_enc,
-                 head,
+                 object_net=None,
+                 object_enc=None,
+                 object_dec=None,
+                 head=None,
                  ):
         super().__init__()
 
         self.hparam = hparam
         self.lane_enable = hparam['lane_enable']
-        self.social_enable = hparam['social_enable']
+        self.object_enable = hparam['object_enable']
         model_dim = hparam['model_dim']
         pos_dim = hparam['pos_dim']
         dist_dim = hparam['dist_dim']
         lane_enc_dim = hparam['lane_enc_dim']
+        object_enc_dim = hparam['object_enc_dim']
         agent_dim = hparam['agent_dim']
         K = hparam['num_queries']
         dropout = hparam['dropout']
@@ -49,21 +53,11 @@ class MMTrans(BaseModule):
             self.lane_enc = FI.create(lane_enc)
             self.lane_dec = FI.create(lane_dec)
 
-        if self.social_enable:
-            self.social_emb = FI.create(dict(type='MLP',
-                                             in_channels=K * model_dim,
-                                             hidden_channels=dist_dim,
-                                             out_channels=dist_dim))
-            self.social_mlp = FI.create(dict(type='MLP',
-                                             in_channels=dist_dim + pos_dim,
-                                             hidden_channels=model_dim,
-                                             out_channels=model_dim))
-            self.social_enc = FI.create(social_enc)
-
-        self.pos_mlp = FI.create(dict(type='MLP',
-                                      in_channels=2,
-                                      hidden_channels=pos_dim,
-                                      out_channels=pos_dim))
+        if self.object_enable:
+            self.object_emb = LinearEmbedding(object_enc_dim, model_dim)
+            self.object_net = FI.create(object_net)
+            self.object_enc = FI.create(object_enc)
+            self.object_dec = FI.create(object_dec)
 
         self.head = FI.create(head)
 
@@ -81,50 +75,44 @@ class MMTrans(BaseModule):
 
     def forward_train(self, batch):
         agent = batch['input']['agent']  # (B, 19, 4)
-        object = batch['input']['object']  # (B, O, 20, 4)
-        lane = batch['input']['lane']  # (B, L, 9, 7)
+        object = batch['input']['object']  # (B, O, 19, 4)
+        lane = batch['input']['lane']  # (B, L, 15, 7)
         object_num = batch['input']['object_num']  # (B)
         lane_num = batch['input']['lane_num']  # (B)
 
         # batch_size, max_agent_num, max_lane_num
         B, O, L, K = agent.shape[0], object.shape[1], lane.shape[1], self.hparam['num_queries']
 
-        lane_mask = construct_mask(lane_num, L, inverse=True)  # (B, L)
-
-        # fusion agent
-        agent = self.agent_emb(agent)
-
-        agent = self.agent_pos_enc(agent)  # (B, 19, model_dim)
-
-        # (B, 19, model_dim)
-        agent = self.agent_enc(agent)
-
         # (B, K, model_dim)
         query_batches = self.query.weight.unsqueeze(0).expand(B, -1, -1)
 
-        # (B, K, model_dim)
+        # fusion agent
+        agent = self.agent_emb(agent)
+        agent = self.agent_pos_enc(agent)
+        agent = self.agent_enc(agent)
         agent_out = self.agent_dec(query_batches, agent)
 
         # fusion lane
         if self.lane_enable:
+            lane_mask = construct_mask(lane_num, L, inverse=True)
             lane = self.lane_net(lane)  # (B, L, 64)
-
             lane = self.lane_emb(lane)  # (B, L, model_dim)
-
             lane = self.lane_enc(lane, mask=lane_mask)  # (B, L, model_dim)
-
-            # (B, K, model_dim)
             lane_out = self.lane_dec(agent_out, lane, mask=lane_mask)
 
-        if self.social_enable:
-            raise NotImplementedError
+        if self.object_enable:
+            object_mask = construct_mask(object_num, O, inverse=True)
+            object = self.object_net(object)
+            object = self.object_emb(object)
+            object = self.object_enc(object, mask=object_mask)
+            object_out = self.object_dec(lane_out, object, mask=object_mask)
 
-        if not self.lane_enable and not self.social_enable:
+        if not self.lane_enable and not self.object_enable:
             head_in = agent_out
-        elif not self.social_enable:
+        elif not self.object_enable:
             head_in = lane_out
         else:
-            raise NotImplementedError
+            head_in = object_out
 
         head_out = self.head(head_in)
 
@@ -161,12 +149,12 @@ class MMTrans(BaseModule):
             # (B, K, model_dim)
             lane_out = self.lane_dec(agent_out, lane, mask=lane_mask)
 
-        if self.social_enable:
+        if self.object_enable:
             raise NotImplementedError
 
-        if not self.lane_enable and not self.social_enable:
+        if not self.lane_enable and not self.object_enable:
             head_in = agent_out
-        elif not self.social_enable:
+        elif not self.object_enable:
             head_in = lane_out
         else:
             raise NotImplementedError

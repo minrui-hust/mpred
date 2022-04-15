@@ -11,18 +11,19 @@ dataset_root = GCFG['dataset_root'] or '/data/waymo'
 # global config
 ############################
 lane_enable = True
-social_enable = True
+object_enable = True
 model_dim = 128
 pos_dim = 64
 dist_dim = 128
 lane_enc_dim = 64
+object_enc_dim = 64
 agent_dim = 4
 num_queries = 6
 dropout = 0.0
 num_heads = 2
 agent_layers = 2
 lane_layers = 2
-social_layers = 2
+object_layers = 2
 pred_win = 30
 obj_radius=50
 
@@ -33,11 +34,12 @@ model_train = dict(
     type='MMTrans',
     hparam=dict(
         lane_enable=lane_enable,
-        social_enable=social_enable,
+        object_enable=object_enable,
         model_dim=model_dim,
         pos_dim=pos_dim,
         dist_dim=dist_dim,
         lane_enc_dim=lane_enc_dim,
+        object_enc_dim=object_enc_dim,
         agent_dim=agent_dim,
         dropout=dropout,
         num_queries=num_queries,
@@ -156,9 +158,15 @@ model_train = dict(
             ),
         ),
     ),
-    social_enc=dict(
+    object_net=dict(
+        type='LaneNet',
+        in_channels=6,
+        hidden_unit=64,
+        layer_num=2,
+    ),
+    object_enc=dict(
         type='TransformerEncoder',
-        layer_num=social_layers,
+        layer_num=object_layers,
         layer_cfg=dict(
             type='TransformerEncoderLayer',
             atten_cfg=dict(
@@ -180,9 +188,39 @@ model_train = dict(
             ),
         ),
     ),
+    object_dec=dict(
+        type='TransformerDecoder',
+        layer_num=object_layers,
+        layer_cfg=dict(
+            type='TransformerDecoderLayer',
+            self_atten_cfg=dict(
+                type='MultiHeadSelfAtten',
+                embed_dim=model_dim,
+                dropout=dropout,
+                num_heads=num_heads,
+            ),
+            cross_atten_cfg=dict(
+                type='MultiHeadCrossAtten',
+                embed_dim=model_dim,
+                dropout=dropout,
+                num_heads=num_heads,
+            ),
+            ff_cfg=dict(
+                type='MLP',
+                in_channels=model_dim,
+                hidden_channels=model_dim*2,
+                out_channels=model_dim,
+                norm_cfg=None,
+            ),
+            norm_cfg=dict(
+                type='LayerNorm',
+                normalized_shape=model_dim,
+            ),
+        ),
+    ),
     head=dict(
         type='MLPHead',
-        in_channels=model_dim*2,
+        in_channels=model_dim,
         heads={
             'traj': (model_dim, pred_win*2),
             'score': (model_dim, 1),
@@ -226,7 +264,7 @@ dataloader_train = dict(
     pin_memory=False,
     dataset=dict(
         type='ArgoPredDataset',
-        info_path=f'{dataset_root}/train_info.pkl',
+        info_path=f'{dataset_root}/val_info.pkl',
         load_opt=dict(
             map_path=f'{dataset_root}/map_info.pkl',
             obs_len=20,
@@ -267,7 +305,7 @@ fit = dict(
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
-        pct_start=0.4,
+        pct_start=0.3,
     ),
     grad_clip=dict(type='norm', value=0.1),
 )

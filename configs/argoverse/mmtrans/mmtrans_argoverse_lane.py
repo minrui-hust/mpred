@@ -11,11 +11,12 @@ dataset_root = GCFG['dataset_root'] or '/data/waymo'
 # global config
 ############################
 lane_enable = True
-social_enable = False
+object_enable = False
 model_dim = 128
 pos_dim = 64
 dist_dim = 128
 lane_enc_dim = 64
+object_enc_dim = 64
 agent_dim = 4
 num_queries = 6
 dropout = 0.0
@@ -32,11 +33,12 @@ model_train = dict(
     type='MMTrans',
     hparam=dict(
         lane_enable=lane_enable,
-        social_enable=social_enable,
+        object_enable=object_enable,
         model_dim=model_dim,
         pos_dim=pos_dim,
         dist_dim=dist_dim,
         lane_enc_dim=lane_enc_dim,
+        object_enc_dim=object_enc_dim,
         agent_dim=agent_dim,
         dropout=dropout,
         num_queries=num_queries,
@@ -138,30 +140,6 @@ model_train = dict(
             ),
             cross_atten_cfg=dict(
                 type='MultiHeadCrossAtten',
-                embed_dim=model_dim,
-                dropout=dropout,
-                num_heads=num_heads,
-            ),
-            ff_cfg=dict(
-                type='MLP',
-                in_channels=model_dim,
-                hidden_channels=model_dim*2,
-                out_channels=model_dim,
-                norm_cfg=None,
-            ),
-            norm_cfg=dict(
-                type='LayerNorm',
-                normalized_shape=model_dim,
-            ),
-        ),
-    ),
-    social_enc=dict(
-        type='TransformerEncoder',
-        layer_num=social_layers,
-        layer_cfg=dict(
-            type='TransformerEncoderLayer',
-            atten_cfg=dict(
-                type='MultiHeadSelfAtten',
                 embed_dim=model_dim,
                 dropout=dropout,
                 num_heads=num_heads,

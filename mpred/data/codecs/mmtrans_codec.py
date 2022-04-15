@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from mpred.core.annotation_pred import AnnotationTrajPred
 from functools import partial
+from mai.utils.misc import is_nan_or_inf
 
 
 @FI.register
@@ -28,9 +29,10 @@ class MMTransCodec(BaseCodec):
         object = sample['data']['agent'][1:]
         valid_mask = object[:, -1, -1] > 0
         object = object[valid_mask]
+        object = np.concatenate([object[:, :-1, :2], object[:, 1:, :]], axis=-1)  # vectorize
         if len(object) > 64:
             object = object[:64]
-        object_num = np.array(len(object), dtype=np.int32)  # (H, 4)
+        object_num = np.array(len(object), dtype=np.int32)  # (H-1, 6)
 
         # encode lane
         lane = sample['data']['lane']
@@ -38,7 +40,7 @@ class MMTransCodec(BaseCodec):
             [lane[:, :-1, :2], lane[:, 1:, :]], axis=-1)  # vectorize
         if len(lane) > 128:
             lane = lane[:128]
-        lane_num = np.array(len(lane), dtype=np.int32)
+        lane_num = np.array(len(lane), dtype=np.int32) # (L-1, 7)
 
         sample['input'] = dict(
             agent=torch.from_numpy(agent),
@@ -104,9 +106,13 @@ class MMTransCodec(BaseCodec):
         traj_dist = torch.linalg.norm(
             pred_traj[:, :, -1, :] - gt_traj[:, :, -1, :], dim=-1)
         min_idx = torch.min(traj_dist, dim=-1)[1]
+        is_nan_or_inf(pred_traj, '~~~~~~~pred_traj')
 
         pred_traj = torch.gather(pred_traj, 1, min_idx.view(
             min_idx.shape[0], 1, 1, 1).expand(-1, -1, pred_traj.shape[2], pred_traj.shape[3]))
+
+        is_nan_or_inf(pred_traj, '!!!!!!pred_traj')
+        is_nan_or_inf(gt_traj, '!!!!!!gt_traj')
 
         traj_loss = F.huber_loss(
             pred_traj, gt_traj, delta=self.loss_cfg['delta'])
@@ -118,7 +124,9 @@ class MMTransCodec(BaseCodec):
         loss = self.loss_cfg['wgt']['traj'] * traj_loss + \
             self.loss_cfg['wgt']['score'] * score_loss
 
-        return dict(loss=loss, traj_loss=traj_loss, score_loss=score_loss)
+        loss_dict = dict(loss=loss, traj_loss=traj_loss, score_loss=score_loss)
+
+        return loss_dict
 
     def collater(self):
         def pad_func(data, data_list, size=None):
