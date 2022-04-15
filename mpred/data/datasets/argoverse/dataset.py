@@ -25,9 +25,11 @@ class ArgoPredDataset(MPredDataset):
         agent = agent[mask]
 
         city = info['city']
-        lane = info['lane']
-        lane = [self.lane_dict[city][self.lane_id2idx[city][id]]
-                for id in lane]
+        lane_ids = info['lane']
+        lane = []
+        for id in lane_ids:
+            indices = self.lane_id2idx[city][id]
+            lane.extend([self.lane_dict[city][idx] for idx in indices])
         lane = np.stack(lane, axis=0)
 
         sample['data'] = dict(agent=agent, lane=lane)

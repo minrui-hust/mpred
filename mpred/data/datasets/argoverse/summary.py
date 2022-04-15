@@ -21,10 +21,11 @@ class ArgoPredSummary(object):
         summary(root_path, split, **kwargs)
 
 
-def summary(root_path, split, obs_len=20, obj_radius=56, lane_radius=65, num_workers=1):
-    am = summary_map(root_path)
-    summary_data(root_path, split, am, obs_len,
-                 obj_radius, lane_radius, num_workers)
+def summary(root_path, split, obs_len=20, obj_radius=56, lane_radius=65, lane_size=16, lane_reso=1.0, map_only=False, num_workers=1):
+    am = summary_map_new(root_path, lane_size, lane_reso)
+    if not map_only:
+        summary_data(root_path, split, am, obs_len,
+                     obj_radius, lane_radius, num_workers)
 
 
 def summary_data(root_path, split, am, obs_len, obj_radius, lane_radius, num_workers):
@@ -49,7 +50,7 @@ def summary_data(root_path, split, am, obs_len, obj_radius, lane_radius, num_wor
     info_list = []
     for res in results:
         info_list.extend(res)
-        del res # release memory
+        del res  # release memory
 
     io.dump(info_list, os.path.join(root_path, f'{split}_info.pkl'))
 
@@ -102,6 +103,79 @@ def summary_map(root_path):
                                       np.full((len(lane_cl), 1), lane_info3)], axis=-1)
             dict[city_name].append(lane_nd)
             lane_id2idx[city_name][lane_id] = i
+
+        dict[city_name] = np.stack(dict[city_name], axis=0).astype(np.float32)
+
+    io.dump([dict, lane_id2idx], os.path.join(root_path, 'map_info.pkl'))
+    for city, lane in dict.items():
+        print(f'{city}: {len(lane)} lanes')
+
+    return am
+
+
+def summary_map_new(root_path, lane_size, lane_reso):
+    am = ArgoverseMap()
+    lane_dict = am.build_centerline_index()
+
+    # go through each lane segment
+    dict = {'PIT': [], 'MIA': []}
+    lane_id2idx = {'PIT': {}, 'MIA': {}}
+    for city_name in ['PIT', 'MIA']:
+        for i, lane_id in tqdm(enumerate(lane_dict[city_name].keys())):
+            lane_cl = am.get_lane_segment_centerline(lane_id, city_name)[:, :2]
+            is_intersection = am.lane_is_in_intersection(lane_id, city_name)
+            turn_direction = am.get_lane_turn_direction(lane_id, city_name)
+            traffic_control = am.lane_has_traffic_control_measure(
+                lane_id, city_name)
+            lane_info1 = 1
+            if(is_intersection):
+                lane_info1 = 2
+            lane_info2 = 1
+            if(turn_direction == "LEFT"):
+                lane_info2 = 2
+            elif(turn_direction == "RIGHT"):
+                lane_info2 = 3
+            lane_info3 = 1
+            if(traffic_control):
+                lane_info3 = 2
+
+            lane_attri = np.concatenate([np.full((lane_size, 1), lane_info1),
+                                         np.full((lane_size, 1), lane_info2),
+                                         np.full((lane_size, 1), lane_info3)], axis=-1)
+
+            lane_list = []
+            p_last = lane_cl[0]
+            lane = [p_last]
+            s = 0
+            for j in range(1, len(lane_cl)):
+                p_curr = lane_cl[j]
+                delta = p_curr - p_last
+                dist = np.linalg.norm(delta)
+                length=0
+                while s+dist-length >= lane_reso:
+                    length += lane_reso - s
+                    p_sample = length/dist * delta + p_last
+                    lane.append(p_sample)
+                    if len(lane)==lane_size:
+                        lane_np = np.stack(lane, axis=0)
+                        lane_np = np.concatenate([lane_np, lane_attri], axis=-1)
+                        lane_list.append(lane_np)
+                        lane = [p_sample]
+                    s = 0
+                s += dist-length
+                p_last = p_curr
+
+                if j==len(lane_cl)-1:
+                    lane.append(p_last)
+                    lane_np = np.stack(lane, axis=0)
+                    if len(lane_np) < lane_size: # pad to lane_size
+                        lane_np = np.pad(lane_np, ((0, lane_size-len(lane_np)), (0, 0)), mode='edge')
+                    lane_np = np.concatenate([lane_np, lane_attri], axis=-1)
+                    lane_list.append(lane_np)
+
+            lane_id2idx[city_name][lane_id] = list(
+                range(len(dict[city_name]), len(dict[city_name])+len(lane_list)))
+            dict[city_name].extend(lane_list)
 
         dict[city_name] = np.stack(dict[city_name], axis=0).astype(np.float32)
 

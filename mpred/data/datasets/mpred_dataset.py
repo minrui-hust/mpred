@@ -69,7 +69,8 @@ class MPredDataset(BaseDataset):
 
             cm = plt.cm.get_cmap('spring')
             for traj, score in zip(sample['pred'].trajs, sample['pred'].scores):
-                plt.scatter(traj[:, 0], traj[:, 1], s=32, c=cm(c), marker='H')
-                plt.text(traj[-1, 0], traj[-1,1], str(score))
+                #  plt.scatter(traj[:, 0], traj[:, 1], s=32, c=cm(c), marker='H')
+                plt.plot(traj[:, 0], traj[:, 1], 'g', lw=5, mew=3)
+                plt.text(traj[-1, 0], traj[-1, 1], str(score))
 
         plt.show()
