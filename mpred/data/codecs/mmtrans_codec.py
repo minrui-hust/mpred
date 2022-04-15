@@ -106,13 +106,9 @@ class MMTransCodec(BaseCodec):
         traj_dist = torch.linalg.norm(
             pred_traj[:, :, -1, :] - gt_traj[:, :, -1, :], dim=-1)
         min_idx = torch.min(traj_dist, dim=-1)[1]
-        is_nan_or_inf(pred_traj, '~~~~~~~pred_traj')
 
         pred_traj = torch.gather(pred_traj, 1, min_idx.view(
             min_idx.shape[0], 1, 1, 1).expand(-1, -1, pred_traj.shape[2], pred_traj.shape[3]))
-
-        is_nan_or_inf(pred_traj, '!!!!!!pred_traj')
-        is_nan_or_inf(gt_traj, '!!!!!!gt_traj')
 
         traj_loss = F.huber_loss(
             pred_traj, gt_traj, delta=self.loss_cfg['delta'])
