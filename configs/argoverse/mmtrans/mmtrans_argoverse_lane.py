@@ -244,7 +244,7 @@ fit = dict(
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
-        pct_start=0.3,
+        pct_start=0.2,
     ),
     grad_clip=dict(type='norm', value=0.1),
 )
