@@ -10,6 +10,7 @@ dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
 ############################
+output_stage='object'
 lane_enable = True
 object_enable = True
 model_dim = 128
@@ -32,7 +33,10 @@ obj_radius=50
 ############################
 model_train = dict(
     type='MMTrans',
+    freeze_agent=True,
+    freeze_lane=True,
     hparam=dict(
+        output_stage=output_stage,
         lane_enable=lane_enable,
         object_enable=object_enable,
         model_dim=model_dim,

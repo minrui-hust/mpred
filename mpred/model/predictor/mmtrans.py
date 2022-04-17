@@ -16,22 +16,25 @@ class MMTrans(BaseModule):
                  hparam,
                  agent_enc,
                  agent_dec,
-                 lane_net,
-                 lane_enc,
-                 lane_dec,
+                 lane_net=None,
+                 lane_enc=None,
+                 lane_dec=None,
                  object_net=None,
                  object_enc=None,
                  object_dec=None,
                  head=None,
+                 freeze_agent=False,
+                 freeze_lane=False,
                  ):
         super().__init__()
 
         self.hparam = hparam
         self.lane_enable = hparam['lane_enable']
         self.object_enable = hparam['object_enable']
+        self.output_stage = hparam['output_stage']
+        self.freeze_agent = freeze_agent
+        self.freeze_lane = freeze_lane
         model_dim = hparam['model_dim']
-        pos_dim = hparam['pos_dim']
-        dist_dim = hparam['dist_dim']
         lane_enc_dim = hparam['lane_enc_dim']
         object_enc_dim = hparam['object_enc_dim']
         agent_dim = hparam['agent_dim']
@@ -42,24 +45,21 @@ class MMTrans(BaseModule):
         self.agent_pos_enc = PositionalEncoding(model_dim, dropout)
         self.agent_enc = FI.create(agent_enc)
         self.agent_dec = FI.create(agent_dec)
-        self.agent_mlp = FI.create(dict(type='MLP',
-                                        in_channels=model_dim + pos_dim,
-                                        hidden_channels=model_dim,
-                                        out_channels=model_dim))
+        self.agent_head = FI.create(head)
 
         if self.lane_enable:
             self.lane_emb = LinearEmbedding(lane_enc_dim, model_dim)
             self.lane_net = FI.create(lane_net)
             self.lane_enc = FI.create(lane_enc)
             self.lane_dec = FI.create(lane_dec)
+            self.lane_head = FI.create(head)
 
         if self.object_enable:
             self.object_emb = LinearEmbedding(object_enc_dim, model_dim)
             self.object_net = FI.create(object_net)
             self.object_enc = FI.create(object_enc)
             self.object_dec = FI.create(object_dec)
-
-        self.head = FI.create(head)
+            self.object_head = FI.create(head)
 
         self.query = nn.Embedding(K, model_dim)
 
@@ -70,8 +70,20 @@ class MMTrans(BaseModule):
             if param.dim() > 1:
                 nn.init.xavier_uniform_(param)
 
-        self.query.weight.requires_grad == False
+        self.query.weight.requires_grad = False
         nn.init.orthogonal_(self.query.weight)
+
+        if self.freeze_agent:
+            self.agent_emb.freeze()
+            self.agent_pos_enc.freeze()
+            self.agent_enc.freeze()
+            self.agent_dec.freeze()
+
+        if self.freeze_lane:
+            self.lane_emb.freeze()
+            self.lane_net.freeze()
+            self.lane_enc.freeze()
+            self.lane_dec.freeze()
 
     def forward_train(self, batch):
         agent = batch['input']['agent']  # (B, 19, 4)
@@ -91,6 +103,7 @@ class MMTrans(BaseModule):
         agent = self.agent_pos_enc(agent)
         agent = self.agent_enc(agent)
         agent_out = self.agent_dec(query_batches, agent)
+        agent_head_out = self.agent_head(agent_out)
 
         # fusion lane
         if self.lane_enable:
@@ -99,6 +112,7 @@ class MMTrans(BaseModule):
             lane = self.lane_emb(lane)  # (B, L, model_dim)
             lane = self.lane_enc(lane, mask=lane_mask)  # (B, L, model_dim)
             lane_out = self.lane_dec(agent_out, lane, mask=lane_mask)
+            lane_head_out = self.lane_head(lane_out)
 
         if self.object_enable:
             object_mask = construct_mask(object_num, O, inverse=True)
@@ -106,17 +120,16 @@ class MMTrans(BaseModule):
             object = self.object_emb(object)
             object = self.object_enc(object, mask=object_mask)
             object_out = self.object_dec(lane_out, object, mask=object_mask)
+            object_head_out = self.object_head(object_out)
 
-        if not self.lane_enable and not self.object_enable:
-            head_in = agent_out
-        elif not self.object_enable:
-            head_in = lane_out
+        if self.output_stage == 'agent':
+            return agent_head_out
+        elif self.output_stage == 'lane':
+            return lane_head_out
+        elif self.output_stage == 'object':
+            return object_head_out
         else:
-            head_in = object_out
-
-        head_out = self.head(head_in)
-
-        return head_out
+            raise NotImplementedError
 
     def forward_export(self, agent, lane, object, object_num, lane_num):
         # batch_size, max_agent_num, max_lane_num
@@ -165,7 +178,7 @@ class MMTrans(BaseModule):
 
 
 @FI.register
-class LaneNet(nn.Module):
+class LaneNet(BaseModule):
     def __init__(self, in_channels, hidden_unit, layer_num):
         super(LaneNet, self).__init__()
         self.layer_list = nn.ModuleList()
@@ -193,7 +206,7 @@ class LaneNet(nn.Module):
         return x_max
 
 
-class LinearEmbedding(nn.Module):
+class LinearEmbedding(BaseModule):
     def __init__(self, inp_size, d_model):
         super(LinearEmbedding, self).__init__()
         # lut => lookup table
@@ -204,7 +217,7 @@ class LinearEmbedding(nn.Module):
         return self.lut(x) * math.sqrt(self.d_model)
 
 
-class PositionalEncoding(nn.Module):
+class PositionalEncoding(BaseModule):
     """
     Implement the PE function.
     """
