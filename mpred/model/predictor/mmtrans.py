@@ -70,7 +70,7 @@ class MMTrans(BaseModule):
             if param.dim() > 1:
                 nn.init.xavier_uniform_(param)
 
-        self.query.weight.requires_grad = False
+        #  self.query.weight.requires_grad = False
         nn.init.orthogonal_(self.query.weight)
 
         if self.freeze_agent:
