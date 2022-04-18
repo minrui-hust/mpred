@@ -287,6 +287,7 @@ dataloader_train = dict(
         transforms=[
             dict(type='ObjectRangeFilter', obj_radius=obj_radius),
             dict(type='Normlize'),
+            dict(type='MpredMirrorFlip', mirror_prob=0.0, flip_prob=0.5),
         ],
     ),
 )
