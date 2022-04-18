@@ -109,6 +109,7 @@ model_train = dict(
         in_channels=7,
         hidden_unit=64,
         layer_num=2,
+        act_cfg=dict(type='ReLU', inplace=True),
     ),
     lane_enc=dict(
         type='TransformerEncoder',
@@ -171,6 +172,7 @@ model_train = dict(
         in_channels=6,
         hidden_unit=64,
         layer_num=2,
+        act_cfg=dict(type='ReLU', inplace=True),
     ),
     object_enc=dict(
         type='TransformerEncoder',

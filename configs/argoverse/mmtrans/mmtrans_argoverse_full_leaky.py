@@ -68,7 +68,7 @@ model_train = dict(
                 act_cfg=dict(
                     type='LeakyReLU',
                     negative_slope=0.01,
-                    inplace=False,
+                    inplace=True,
                 ),
             ),
             norm_cfg=dict(
@@ -103,7 +103,7 @@ model_train = dict(
                 act_cfg=dict(
                     type='LeakyReLU',
                     negative_slope=0.01,
-                    inplace=False,
+                    inplace=True,
                 ),
             ),
             norm_cfg=dict(
@@ -117,6 +117,11 @@ model_train = dict(
         in_channels=7,
         hidden_unit=64,
         layer_num=2,
+        act_cfg=dict(
+            type='LeakyReLU',
+            negative_slope=0.01,
+            inplace=True,
+        ),
     ),
     lane_enc=dict(
         type='TransformerEncoder',
@@ -138,7 +143,7 @@ model_train = dict(
                 act_cfg=dict(
                     type='LeakyReLU',
                     negative_slope=0.01,
-                    inplace=False,
+                    inplace=True,
                 ),
             ),
             norm_cfg=dict(
@@ -173,7 +178,7 @@ model_train = dict(
                 act_cfg=dict(
                     type='LeakyReLU',
                     negative_slope=0.01,
-                    inplace=False,
+                    inplace=True,
                 ),
             ),
             norm_cfg=dict(
@@ -187,6 +192,11 @@ model_train = dict(
         in_channels=6,
         hidden_unit=64,
         layer_num=2,
+        act_cfg=dict(
+            type='LeakyReLU',
+            negative_slope=0.01,
+            inplace=True,
+        ),
     ),
     object_enc=dict(
         type='TransformerEncoder',
@@ -208,7 +218,7 @@ model_train = dict(
                 act_cfg=dict(
                     type='LeakyReLU',
                     negative_slope=0.01,
-                    inplace=False,
+                    inplace=True,
                 ),
             ),
             norm_cfg=dict(
@@ -243,7 +253,7 @@ model_train = dict(
                 act_cfg=dict(
                     type='LeakyReLU',
                     negative_slope=0.01,
-                    inplace=False,
+                    inplace=True,
                 ),
             ),
             norm_cfg=dict(
@@ -262,7 +272,7 @@ model_train = dict(
         act_cfg=dict(
             type='LeakyReLU',
             negative_slope=0.01,
-            inplace=False,
+            inplace=True,
         ),
     ),
 )

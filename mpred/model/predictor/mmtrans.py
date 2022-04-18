@@ -179,12 +179,17 @@ class MMTrans(BaseModule):
 
 @FI.register
 class LaneNet(BaseModule):
-    def __init__(self, in_channels, hidden_unit, layer_num):
+    def __init__(self, in_channels, hidden_unit, layer_num, act_cfg=dict(type='ReLU')):
         super(LaneNet, self).__init__()
         self.layer_list = nn.ModuleList()
         for i in range(layer_num):
-            self.layer_list.append(FI.create(dict(type='MLP', in_channels=in_channels,
-                                             hidden_channels=hidden_unit, out_channels=hidden_unit)))
+            self.layer_list.append(FI.create(dict(
+                type='MLP',
+                in_channels=in_channels,
+                hidden_channels=hidden_unit,
+                out_channels=hidden_unit,
+                act_cfg=act_cfg,
+            )))
             in_channels = hidden_unit*2
 
     def forward(self, x):
