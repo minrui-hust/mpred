@@ -65,7 +65,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
-                act_cfg=dict(type='ReLU', inplace=True),
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -96,7 +100,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
-                act_cfg=dict(type='ReLU', inplace=True),
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -127,7 +135,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
-                act_cfg=dict(type='ReLU', inplace=True),
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -158,7 +170,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
-                act_cfg=dict(type='ReLU', inplace=True),
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -189,7 +205,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
-                act_cfg=dict(type='ReLU', inplace=True),
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -220,7 +240,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
-                act_cfg=dict(type='ReLU', inplace=True),
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -235,7 +259,11 @@ model_train = dict(
             'traj': (model_dim, pred_win*2),
             'score': (model_dim, 1),
         },
-        act_cfg=dict(type='ReLU', inplace=True),
+        act_cfg=dict(
+            type='LeakyReLU',
+            negative_slope=0.01,
+            inplace=False,
+        ),
     ),
 )
 
