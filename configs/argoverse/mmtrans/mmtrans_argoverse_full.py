@@ -4,13 +4,13 @@ from mai.utils import GCFG
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 32  # different from original, which is 4
 num_workers = GCFG['num_workers'] or 2
-max_epochs = GCFG['max_epochs'] or 36
+max_epochs = GCFG['max_epochs'] or 96
 lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
 ############################
-output_stage='object'
+output_stage = 'object'
 lane_enable = True
 object_enable = True
 model_dim = 128
@@ -26,15 +26,15 @@ agent_layers = 2
 lane_layers = 2
 object_layers = 2
 pred_win = 30
-obj_radius=50
+obj_radius = 50
 
 
 # model config
 ############################
 model_train = dict(
     type='MMTrans',
-    freeze_agent=True,
-    freeze_lane=True,
+    freeze_agent=False,
+    freeze_lane=False,
     hparam=dict(
         output_stage=output_stage,
         lane_enable=lane_enable,
@@ -65,6 +65,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -95,6 +100,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -125,6 +135,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -155,6 +170,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -185,6 +205,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -215,6 +240,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=0.01,
+                    inplace=False,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -229,6 +259,11 @@ model_train = dict(
             'traj': (model_dim, pred_win*2),
             'score': (model_dim, 1),
         },
+        act_cfg=dict(
+            type='LeakyReLU',
+            negative_slope=0.01,
+            inplace=False,
+        ),
     ),
 )
 
@@ -305,7 +340,7 @@ fit = dict(
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.0006 / 16 * batch_size * lr_scale,
+        max_lr=0.0002 / 16 * batch_size * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
