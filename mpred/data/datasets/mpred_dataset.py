@@ -3,13 +3,17 @@ import numpy as np
 
 
 class MPredDataset(BaseDataset):
-    def __init__(self, info_path, filters=[], transforms=[], codec=None):
+    def __init__(self, info_path, load_opt={}, filters=[], transforms=[], codec=None):
         super().__init__(info_path, filters, transforms, codec)
+        self.load_opt = load_opt
 
     def load(self, sample, info):
-        self.load_meta(sample, info)
-        self.load_data(sample, info)
-        self.load_anno(sample, info)
+        if self.load_opt.get('load_meta', True):
+            self.load_meta(sample, info)
+        if self.load_opt.get('load_data', True):
+            self.load_data(sample, info)
+        if self.load_opt.get('load_anno', True):
+            self.load_anno(sample, info)
 
     def load_meta(self, sample, info):
         raise NotImplementedError

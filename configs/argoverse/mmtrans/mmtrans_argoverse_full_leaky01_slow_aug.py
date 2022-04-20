@@ -4,39 +4,47 @@ from mai.utils import GCFG
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 32  # different from original, which is 4
 num_workers = GCFG['num_workers'] or 2
-max_epochs = GCFG['max_epochs'] or 36
+max_epochs = GCFG['max_epochs'] or 128
 lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
 ############################
-lane_enable=True
-social_enable=False
+output_stage = 'object'
+lane_enable = True
+object_enable = True
 model_dim = 128
 pos_dim = 64
 dist_dim = 128
 lane_enc_dim = 64
+object_enc_dim = 64
 agent_dim = 4
 num_queries = 6
 dropout = 0.0
 num_heads = 2
 agent_layers = 2
 lane_layers = 2
-social_layers = 2
+object_layers = 2
 pred_win = 30
+obj_radius = 50
 
+act_neg_slope = 0.1
 
 # model config
 ############################
 model_train = dict(
     type='MMTrans',
+    freeze_agent=False,
+    freeze_lane=False,
     hparam=dict(
+        output_stage=output_stage,
         lane_enable=lane_enable,
-        social_enable=social_enable,
+        object_enable=object_enable,
         model_dim=model_dim,
         pos_dim=pos_dim,
         dist_dim=dist_dim,
         lane_enc_dim=lane_enc_dim,
+        object_enc_dim=object_enc_dim,
         agent_dim=agent_dim,
         dropout=dropout,
         num_queries=num_queries,
@@ -58,6 +66,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=act_neg_slope,
+                    inplace=True,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -88,6 +101,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=act_neg_slope,
+                    inplace=True,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -99,7 +117,12 @@ model_train = dict(
         type='LaneNet',
         in_channels=7,
         hidden_unit=64,
-        layer_num=4,
+        layer_num=2,
+        act_cfg=dict(
+            type='LeakyReLU',
+            negative_slope=act_neg_slope,
+            inplace=True,
+        ),
     ),
     lane_enc=dict(
         type='TransformerEncoder',
@@ -118,6 +141,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=act_neg_slope,
+                    inplace=True,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -148,6 +176,11 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=act_neg_slope,
+                    inplace=True,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -155,9 +188,20 @@ model_train = dict(
             ),
         ),
     ),
-    social_enc=dict(
+    object_net=dict(
+        type='LaneNet',
+        in_channels=6,
+        hidden_unit=64,
+        layer_num=2,
+        act_cfg=dict(
+            type='LeakyReLU',
+            negative_slope=act_neg_slope,
+            inplace=True,
+        ),
+    ),
+    object_enc=dict(
         type='TransformerEncoder',
-        layer_num=social_layers,
+        layer_num=object_layers,
         layer_cfg=dict(
             type='TransformerEncoderLayer',
             atten_cfg=dict(
@@ -172,6 +216,46 @@ model_train = dict(
                 hidden_channels=model_dim*2,
                 out_channels=model_dim,
                 norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=act_neg_slope,
+                    inplace=True,
+                ),
+            ),
+            norm_cfg=dict(
+                type='LayerNorm',
+                normalized_shape=model_dim,
+            ),
+        ),
+    ),
+    object_dec=dict(
+        type='TransformerDecoder',
+        layer_num=object_layers,
+        layer_cfg=dict(
+            type='TransformerDecoderLayer',
+            self_atten_cfg=dict(
+                type='MultiHeadSelfAtten',
+                embed_dim=model_dim,
+                dropout=dropout,
+                num_heads=num_heads,
+            ),
+            cross_atten_cfg=dict(
+                type='MultiHeadCrossAtten',
+                embed_dim=model_dim,
+                dropout=dropout,
+                num_heads=num_heads,
+            ),
+            ff_cfg=dict(
+                type='MLP',
+                in_channels=model_dim,
+                hidden_channels=model_dim*2,
+                out_channels=model_dim,
+                norm_cfg=None,
+                act_cfg=dict(
+                    type='LeakyReLU',
+                    negative_slope=act_neg_slope,
+                    inplace=True,
+                ),
             ),
             norm_cfg=dict(
                 type='LayerNorm',
@@ -186,6 +270,11 @@ model_train = dict(
             'traj': (model_dim, pred_win*2),
             'score': (model_dim, 1),
         },
+        act_cfg=dict(
+            type='LeakyReLU',
+            negative_slope=act_neg_slope,
+            inplace=True,
+        ),
     ),
 )
 
@@ -233,7 +322,12 @@ dataloader_train = dict(
         ),
         filters=[],
         transforms=[
+            dict(type='ObjectRangeFilter', obj_radius=obj_radius),
             dict(type='Normlize'),
+            dict(type='MpredGlobalTransform',
+                 rot_range=[-0.17, 0.17], scale_range=[0.9, 1.1]),
+            dict(type='MpredMirrorFlip', mirror_prob=0.0, flip_prob=0.5),
+            dict(type='MpredMaskHistory', mask_prob=0.8, max_len=10),
         ],
     ),
 )
@@ -243,10 +337,13 @@ dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/val_info.pkl'
 dataloader_eval['dataset']['filters'] = []
 dataloader_eval['dataset']['transforms'] = [
+    dict(type='ObjectRangeFilter', obj_radius=obj_radius),
     dict(type='Normlize'),
 ]
 
 dataloader_export = _deepcopy(dataloader_eval)
+dataloader_export['dataset']['info_path'] = f'{dataset_root}/test_info.pkl'
+dataloader_export['dataset']['load_opt']['load_anno'] = False
 
 
 # fit config
@@ -260,11 +357,12 @@ fit = dict(
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.0006 / 16 * batch_size * lr_scale,
+        max_lr=0.0002,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
-        pct_start=0.4,
+        final_div_factor=100.0,
+        pct_start=0.1,
     ),
     grad_clip=dict(type='norm', value=0.1),
 )

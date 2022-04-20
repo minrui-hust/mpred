@@ -10,7 +10,7 @@ dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
 ############################
-output_stage='lane'
+output_stage = 'lane'
 lane_enable = True
 object_enable = False
 model_dim = 128
@@ -26,6 +26,7 @@ agent_layers = 2
 lane_layers = 2
 social_layers = 2
 pred_win = 30
+obj_radius = 50
 
 
 # model config
@@ -213,7 +214,12 @@ dataloader_train = dict(
         ),
         filters=[],
         transforms=[
+            dict(type='ObjectRangeFilter', obj_radius=obj_radius),
             dict(type='Normlize'),
+            dict(type='MpredGlobalTransform',
+                 rot_range=[-0.17, 0.17], scale_range=[0.95, 1.05]),
+            dict(type='MpredMirrorFlip', mirror_prob=0.0, flip_prob=0.5),
+            dict(type='MpredMaskHistory', mask_prob=0.8, max_len=10),
         ],
     ),
 )

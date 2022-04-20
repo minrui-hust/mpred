@@ -1,15 +1,18 @@
 from mai.utils import FI
 from mai.utils import io
 import numpy as np
+import os
 
 from mpred.data.datasets.mpred_dataset import MPredDataset
 from mpred.core.annotation_pred import AnnotationTrajPred
+
+from argoverse.evaluation.competition_util import generate_forecasting_h5
 
 
 @FI.register
 class ArgoPredDataset(MPredDataset):
     def __init__(self, info_path, load_opt={}, filters=[], transforms=[], codec=None):
-        super().__init__(info_path, filters, transforms, codec)
+        super().__init__(info_path, load_opt, filters, transforms, codec)
         self.load_opt = load_opt
         self.lane_dict, self.lane_id2idx = io.load(load_opt['map_path'])
 
@@ -50,6 +53,11 @@ class ArgoPredDataset(MPredDataset):
             pred_pb = self._format_anno_list(pred_list, meta_list)
             io.dump(pred_pb, pred_path, format='pkl')
             print(f'Save formatted predictions into {pred_path}')
+            generate_forecasting_h5(
+                data=pred_pb['trajs'],
+                output_path=os.path.dirname(pred_path),
+                filename='pred.h5',
+                probabilities=pred_pb['scores'])
 
         # process anno
         if gt_path is not None:
