@@ -20,7 +20,7 @@ class ArgoPredSummary(object):
         summary(root_path, split, **kwargs)
 
 
-def summary(root_path, split, obs_len=20, obj_radius=56, lane_radius=65, lane_size=16, lane_reso=1.0, valid_len=40, aug=False, map_only=False, num_workers=1):
+def summary(root_path, split, lane_size=16, lane_reso=1.0, num_workers=1):
     summary_map_new(root_path, lane_size, lane_reso)
     summary_traj(root_path, split, num_workers)
 
@@ -109,6 +109,7 @@ def summary_map(root_path):
 
     return am
 
+
 def summary_traj(root_path, split, num_workers=1):
     data_path = os.path.join(root_path, split, 'data')
     frame_name_list = list(os.listdir(data_path))
@@ -121,15 +122,15 @@ def summary_traj(root_path, split, num_workers=1):
             city_list.append(res[1])
 
     offset = 0
-    info_list=[]
+    info_list = []
     for fname, traj, city in tqdm(zip(frame_name_list, traj_list, city_list)):
         name, _ = os.path.splitext(fname)
         id = int(name)
         info = dict(
-                traj_index=(offset, offset+len(traj)), 
-                sample_id=id,
-                city = city,
-                )
+            traj_index=(offset, offset+len(traj)),
+            sample_id=id,
+            city=city,
+        )
         info_list.append(info)
         offset += len(traj)
     total_traj = np.concatenate(traj_list, axis=0)
@@ -141,6 +142,8 @@ def summary_traj(root_path, split, num_workers=1):
 def summary_frame_traj(fname, root_path, split):
     frame_path = os.path.join(root_path, split, 'data', fname)
     df = pd.read_csv(frame_path)
+
+    city_name = df['CITY_NAME'].iloc[0]
 
     df['TIMESTAMP'] -= np.min(df['TIMESTAMP'].values)
     seq_ts = np.unique(df['TIMESTAMP'].values)
@@ -183,7 +186,7 @@ def summary_frame_traj(fname, root_path, split):
 
     agent_traj_np = np.stack(agent_traj_list, axis=0)
 
-    return agent_traj_np
+    return agent_traj_np, city_name
 
 
 def summary_map_new(root_path, lane_size, lane_reso):
