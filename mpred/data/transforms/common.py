@@ -6,7 +6,7 @@ from mdet.core.geometry2d import rotate_points
 error_cnt = 0
 
 @FI.register
-class Normlize(DatasetTransform):
+class Normalize(DatasetTransform):
     def __init__(self, center=True, orient=True):
         super().__init__()
 
