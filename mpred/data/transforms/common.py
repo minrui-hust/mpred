@@ -3,6 +3,7 @@ from mai.data.datasets.transform import DatasetTransform
 import numpy as np
 from mdet.core.geometry2d import rotate_points
 
+error_cnt = 0
 
 @FI.register
 class Normlize(DatasetTransform):
@@ -15,8 +16,18 @@ class Normlize(DatasetTransform):
         lane = sample['data']['lane']
 
         agent_pos = agent[0, obs_len-1, :2].copy()
-        agent_rot = agent[0, obs_len-1, :2] - agent[0, obs_len-2, :2]
-        agent_rot = agent_rot / (np.linalg.norm(agent_rot) + 1e-6)
+
+        valid_last_id = obs_len-2
+        agent_rot = np.array([1,0], dtype=np.float32)
+        while valid_last_id >=0:
+            agent_pos_last = agent[0, valid_last_id, :2]
+            delta = agent_pos - agent_pos_last
+            delta_norm = np.linalg.norm(delta)
+            if delta_norm > 1e-6:
+                agent_rot = delta / delta_norm
+                break
+            valid_last_id -= 1
+
         agent_rot[1] = -agent_rot[1]
 
         agent[:, :, :2] = rotate_points(agent[:, :, :2] - agent_pos, agent_rot)
@@ -24,8 +35,7 @@ class Normlize(DatasetTransform):
 
         if 'anno' in sample:
             anno = sample['anno']
-            anno.trajs[:, :, :2] = rotate_points(
-                anno.trajs[:, :, :2]-agent_pos, agent_rot)
+            anno.trajs = rotate_points(anno.trajs-agent_pos, agent_rot)
 
         sample['meta']['norm_center'] = agent_pos
         sample['meta']['norm_rot'] = agent_rot

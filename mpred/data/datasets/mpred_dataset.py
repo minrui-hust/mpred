@@ -34,6 +34,8 @@ class MPredDataset(BaseDataset):
         plt.axes().set_aspect('equal')
         plt.grid()
 
+        print(sample['meta']['sample_id'])
+
         if show_data and 'data' in sample:
             # plot lane
             lane = sample['data']['lane']
@@ -52,20 +54,13 @@ class MPredDataset(BaseDataset):
             for obj in object:
                 mask = obj[:, -1] > 0
                 obj = obj[mask]
-                plt.scatter(obj[:, 0], obj[:, 1], s=28, c=cm(c[mask]))
+                plt.scatter(obj[:, 0], obj[:, 1], s=4, c=cm(c[mask]))
 
             # plot agent
             cm = plt.cm.get_cmap('autumn')
             agent = sample['data']['agent'][0]
-            plt.scatter(agent[:, 0], agent[:, 1], s=32, c=cm(c))
+            plt.scatter(agent[:, 0], agent[:, 1], s=4, c=cm(c))
 
-        if show_anno and 'anno' in sample:
-            L = sample['meta']['pred_len']
-            c = np.arange(L) / (L-1)
-
-            cm = plt.cm.get_cmap('gray')
-            traj = sample['anno'].trajs[0]
-            plt.scatter(traj[:, 0], traj[:, 1], s=32, c=cm(c), marker='H')
 
         if show_pred and 'pred' in sample:
             L = sample['meta']['pred_len']
@@ -73,8 +68,15 @@ class MPredDataset(BaseDataset):
 
             cm = plt.cm.get_cmap('spring')
             for traj, score in zip(sample['pred'].trajs, sample['pred'].scores):
-                #  plt.scatter(traj[:, 0], traj[:, 1], s=32, c=cm(c), marker='H')
-                plt.plot(traj[:, 0], traj[:, 1], 'g', lw=5, mew=3)
-                plt.text(traj[-1, 0], traj[-1, 1], str(score))
+                plt.plot(traj[:, 0], traj[:, 1], 'g', lw=1, mew=3)
+                #  plt.text(traj[-1, 0], traj[-1, 1], str(score))
+
+        if show_anno and 'anno' in sample:
+            L = sample['meta']['pred_len']
+            c = np.arange(L) / (L-1)
+
+            cm = plt.cm.get_cmap('gray')
+            traj = sample['anno'].trajs[0]
+            plt.plot(traj[:, 0], traj[:, 1], 'r', lw=1, mew=3)
 
         plt.show()
