@@ -135,7 +135,7 @@ def summary_traj(root_path, split, num_workers=1):
         offset += len(traj)
     total_traj = np.concatenate(traj_list, axis=0)
 
-    io.dump(total_traj, os.path.join(root_path, f'{split}_traj_info.pkl'))
+    np.save(os.path.join(root_path, f'{split}_traj.npy'), total_traj)
     io.dump(info_list, os.path.join(root_path, f'{split}_info.pkl'))
 
 
