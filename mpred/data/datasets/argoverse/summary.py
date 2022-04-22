@@ -114,25 +114,26 @@ def summary_traj(root_path, split, num_workers=1):
     data_path = os.path.join(root_path, split, 'data')
     frame_name_list = list(os.listdir(data_path))
 
-    traj_list = []
-    city_list = []
-    with mp.Pool(num_workers) as p:
-        for res in tqdm(p.imap(partial(summary_frame_traj, root_path=root_path, split=split), frame_name_list), total=len(frame_name_list)):
-            traj_list.append(res[0])
-            city_list.append(res[1])
-
     offset = 0
+    traj_list = []
     info_list = []
-    for fname, traj, city in tqdm(zip(frame_name_list, traj_list, city_list)):
-        name, _ = os.path.splitext(fname)
-        id = int(name)
-        info = dict(
-            traj_index=(offset, offset+len(traj)),
-            sample_id=id,
-            city=city,
-        )
-        info_list.append(info)
-        offset += len(traj)
+    with mp.Pool(num_workers) as p:
+        for i, (traj, city) in tqdm(enumerate(
+            p.imap(partial(summary_frame_traj,
+                           root_path=root_path,
+                           split=split),
+                   frame_name_list)
+        ), total=len(frame_name_list)):
+            name, _ = os.path.splitext(frame_name_list[i])
+            id = int(name)
+            traj_list.append(traj)
+            info = dict(
+                traj_index=(offset, offset+len(traj)),
+                id=id,
+                city=city,
+            )
+            info_list.append(info)
+            offset += len(traj)
     total_traj = np.concatenate(traj_list, axis=0)
 
     np.save(os.path.join(root_path, f'{split}_traj.npy'), total_traj)

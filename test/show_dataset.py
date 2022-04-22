@@ -11,15 +11,17 @@ from torch.utils.data.dataloader import DataLoader
 
 dataset = dict(
     type='ArgoPredDataset',
-    info_path=f'/data/dataset/argoverse/prediction/train_info.pkl',
+    info_path=f'/data/dataset/argoverse/prediction/val_info.pkl',
     load_opt=dict(
+        traj_path=f'/data/dataset/argoverse/prediction/val_traj.npy',
         map_path=f'/data/dataset/argoverse/prediction/map_info.pkl',
         obs_len=20,
         pred_len=30,
+        lane_radius=65,
     ),
     filters=[],
     transforms=[
-        dict(type='Normlize'),
+        #  dict(type='Normlize'),
     ],
 )
 
@@ -42,11 +44,11 @@ codec = dict(
 
 dataset = FI.create(dataset)
 codec = FI.create(codec)
-dataset.codec = codec
+#  dataset.codec = codec
 
 for i in range(len(dataset)):
     data = dataset[i]
-    #  dataset.plot(dataset[i])
+    dataset.plot(dataset[i])
 
 dataloader = DataLoader(dataset, batch_size=2,
                         num_workers=0, collate_fn=codec.get_collater())

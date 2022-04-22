@@ -50,7 +50,7 @@ class MPredDataset(BaseDataset):
 
             # plot obj
             cm = plt.cm.get_cmap('winter')
-            object = sample['data']['agent'][1:]
+            object = sample['data']['agent'][1:, :L]
             for obj in object:
                 mask = obj[:, -1] > 0
                 obj = obj[mask]
@@ -58,9 +58,8 @@ class MPredDataset(BaseDataset):
 
             # plot agent
             cm = plt.cm.get_cmap('autumn')
-            agent = sample['data']['agent'][0]
+            agent = sample['data']['agent'][0, :L]
             plt.scatter(agent[:, 0], agent[:, 1], s=4, c=cm(c))
-
 
         if show_pred and 'pred' in sample:
             L = sample['meta']['pred_len']

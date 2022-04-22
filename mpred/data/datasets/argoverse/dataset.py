@@ -7,6 +7,7 @@ from mpred.data.datasets.mpred_dataset import MPredDataset
 from mpred.core.annotation_pred import AnnotationTrajPred
 
 from argoverse.evaluation.competition_util import generate_forecasting_h5
+from argoverse.map_representation.map_api import ArgoverseMap
 
 
 @FI.register
@@ -15,31 +16,35 @@ class ArgoPredDataset(MPredDataset):
         super().__init__(info_path, load_opt, filters, transforms, codec)
         self.load_opt = load_opt
         self.lane_dict, self.lane_id2idx = io.load(load_opt['map_path'])
+        self.trajs = np.load(load_opt['traj_path'])
+        self.am = ArgoverseMap()
 
     def load_meta(self, sample, info):
-        sample['meta'] = dict(sample_id=info['id'], city=info['city'],
-                              obs_len=self.load_opt['obs_len'], pred_len=self.load_opt['pred_len'])
+        sample['meta'] = dict(sample_id=info['id'],
+                              city=info['city'],
+                              obs_len=self.load_opt['obs_len'],
+                              pred_len=self.load_opt['pred_len'])
 
     def load_data(self, sample, info):
-        agent = info['agent'][:, :self.load_opt['obs_len']]
-
-        # filter object that has no data in 0:obs_len
-        mask = np.any(agent[:, :, -1] > 0, axis=1)
-        agent = agent[mask]
+        traj_index = info['traj_index']
+        agent = self.trajs[traj_index[0]:traj_index[1]]
 
         city = info['city']
-        lane_ids = info['lane']
-        lane = []
+        agent_pos = agent[0, self.load_opt['obs_len'], :2]
+
+        lane_ids = self.am.get_lane_ids_in_xy_bbox(
+            agent_pos[0], agent_pos[1], city, self.load_opt['lane_radius'])
+        lanes = []
         for id in lane_ids:
             indices = self.lane_id2idx[city][id]
-            lane.extend([self.lane_dict[city][idx] for idx in indices])
-        lane = np.stack(lane, axis=0)
+            lanes.extend([self.lane_dict[city][idx] for idx in indices])
+        lanes = np.stack(lanes, axis=0)
 
-        sample['data'] = dict(agent=agent, lane=lane)
+        sample['data'] = dict(agent=agent, lane=lanes)
 
     def load_anno(self, sample, info):
-        pred_traj = info['agent'][0,
-                                  self.load_opt['obs_len']:, :2][np.newaxis, :]
+        agent_idx = info['traj_index'][0]
+        pred_traj = self.trajs[[agent_idx], self.load_opt['obs_len']:, :2]
         sample['anno'] = AnnotationTrajPred(trajs=pred_traj)
 
     def format(self, sample_list, pred_path=None, gt_path=None):
