@@ -297,7 +297,7 @@ codec_train = dict(
         delta=1.8,
         wgt={
             'traj': 1.0,
-            'score': 1.0,
+            'score': 0.15,
         }
     ),
 )
@@ -330,7 +330,7 @@ dataloader_train = dict(
             dict(type='Normalize'),
             dict(type='MpredGlobalTransform', scale_range=[0.85, 1.17]),
             dict(type='MpredMirrorFlip', flip_prob=0.5),
-            dict(type='MpredMaskHistory', mask_prob=0.8, max_len=10),
+            dict(type='MpredMaskHistory', mask_prob=0.5, max_len=10),
         ],
     ),
 )
