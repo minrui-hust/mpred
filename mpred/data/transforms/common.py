@@ -5,6 +5,7 @@ from mdet.core.geometry2d import rotate_points
 
 error_cnt = 0
 
+
 @FI.register
 class Normalize(DatasetTransform):
     def __init__(self, center=True, orient=True):
@@ -18,8 +19,8 @@ class Normalize(DatasetTransform):
         agent_pos = agent[0, obs_len-1, :2].copy()
 
         valid_last_id = obs_len-2
-        agent_rot = np.array([1,0], dtype=np.float32)
-        while valid_last_id >=0:
+        agent_rot = np.array([1, 0], dtype=np.float32)
+        while valid_last_id >= 0:
             agent_pos_last = agent[0, valid_last_id, :2]
             delta = agent_pos - agent_pos_last
             delta_norm = np.linalg.norm(delta)
@@ -65,10 +66,12 @@ class ObjectRangeFilter(DatasetTransform):
         self.obj_radius = obj_radius
 
     def __call__(self, sample, info):
-        agent = sample['data']['agent']
-        agent_pos = agent[0, -1, :2].copy()
+        obs_len = sample['meta']['obs_len']
 
-        object_dist = np.linalg.norm(agent[:, -1, :2] - agent_pos, axis=-1)
+        agent = sample['data']['agent']
+        agent_pos = agent[:, obs_len, :2]
+
+        object_dist = np.linalg.norm(agent_pos - agent_pos[0], axis=-1)
         valid_mask = object_dist <= self.obj_radius
 
         sample['data']['agent'] = agent[valid_mask]
@@ -93,16 +96,11 @@ class MpredMirrorFlip(DatasetTransform):
         agent = sample['data']['agent']
         lane = sample['data']['lane']
 
-        agent[:, :, 0] = -agent[:, :, 0]
-        lane[:, :, 0] = -lane[:, :, 0]
-
-        sample['data']['agent'] = agent
-        sample['data']['lane'] = lane
+        sample['data']['agent'][..., 0] = -agent[..., 0]
+        sample['data']['lane'][..., 0] = -lane[..., 0]
 
         if 'anno' in sample:
-            trajs = sample['anno'].trajs
-            trajs[:, :, 0] = -trajs[:, :, 0]
-            sample['anno'].trajs = trajs
+            sample['anno'].trajs[..., 0] = -sample['anno'].trajs[..., 0]
 
     def _flip(self, sample):
         if self.flip_prob < np.random.rand():
@@ -111,16 +109,11 @@ class MpredMirrorFlip(DatasetTransform):
         agent = sample['data']['agent']
         lane = sample['data']['lane']
 
-        agent[:, :, 1] = -agent[:, :, 1]
-        lane[:, :, 1] = -lane[:, :, 1]
-
-        sample['data']['agent'] = agent
-        sample['data']['lane'] = lane
+        sample['data']['agent'][..., 1] = -agent[..., 1]
+        sample['data']['lane'][..., 1] = -lane[..., 1]
 
         if 'anno' in sample:
-            trajs = sample['anno'].trajs
-            trajs[:, :, 1] = -trajs[:, :, 1]
-            sample['anno'].trajs = trajs
+            sample['anno'].trajs[..., 1] = -sample['anno'].trajs[..., 1]
 
 
 @FI.register
@@ -141,11 +134,11 @@ class MpredGlobalTransform(DatasetTransform):
         scale_factor = np.random.uniform(
             self.scale_range[0], self.scale_range[1])
 
-        sample['data']['agent'][:, :, :2] *= scale_factor
-        sample['data']['lane'][:, :, :2] *= scale_factor
+        sample['data']['agent'][..., :2] *= scale_factor
+        sample['data']['lane'][..., :2] *= scale_factor
 
         if 'anno' in sample:
-            sample['anno'].trajs[:, :, :2] *= scale_factor
+            sample['anno'].trajs[..., :2] *= scale_factor
 
     def _rotate(self, sample):
         alpha = np.random.uniform(self.rot_range[0], self.rot_range[1])
@@ -154,17 +147,17 @@ class MpredGlobalTransform(DatasetTransform):
         agent = sample['data']['agent']
         lane = sample['data']['lane']
 
-        agent[:, :, :2] = rotate_points(agent[:, :, :2], rot)
-        lane[:, :, :2] = rotate_points(lane[:, :, :2], rot)
+        agent[..., :2] = rotate_points(agent[..., :2], rot)
+        lane[..., :2] = rotate_points(lane[..., :2], rot)
 
         if 'anno' in sample:
             trajs = sample['anno'].trajs
-            trajs[:, :, :2] = rotate_points(trajs[:, :, :2], rot)
+            trajs[..., :2] = rotate_points(trajs[..., :2], rot)
 
     def _translate(self, sample):
         translation = np.random.normal(scale=self.translation_std, size=2)
 
-        sample['data']['agent'][:, :, :2] -= translation
-        sample['data']['lane'][:, :, :2] -= translation
+        sample['data']['agent'][..., :2] -= translation
+        sample['data']['lane'][..., :2] -= translation
         if 'anno' in sample:
-            sample['anno'].trajs[:, :, :2] -= translation
+            sample['anno'].trajs[..., :2] -= translation

@@ -27,7 +27,7 @@ class ArgoPredDataset(MPredDataset):
 
     def load_data(self, sample, info):
         traj_index = info['traj_index']
-        agent = self.trajs[traj_index[0]:traj_index[1]]
+        agent = self.trajs[traj_index[0]:traj_index[1]].copy()
 
         city = info['city']
         agent_pos = agent[0, self.load_opt['obs_len'], :2]
@@ -44,7 +44,7 @@ class ArgoPredDataset(MPredDataset):
 
     def load_anno(self, sample, info):
         agent_idx = info['traj_index'][0]
-        pred_traj = self.trajs[[agent_idx], self.load_opt['obs_len']:, :2]
+        pred_traj = self.trajs[[agent_idx], self.load_opt['obs_len']:, :2].copy()
         sample['anno'] = AnnotationTrajPred(trajs=pred_traj)
 
     def format(self, sample_list, pred_path=None, gt_path=None):

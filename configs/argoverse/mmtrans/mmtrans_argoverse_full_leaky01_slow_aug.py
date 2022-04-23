@@ -27,6 +27,7 @@ lane_layers = 2
 object_layers = 2
 pred_win = 30
 obj_radius = 50
+lane_radius = 65
 
 act_neg_slope = 0.1
 
@@ -316,14 +317,16 @@ dataloader_train = dict(
         type='ArgoPredDataset',
         info_path=f'{dataset_root}/train_info.pkl',
         load_opt=dict(
+            traj_path=f'{dataset_root}/train_traj.npy',
             map_path=f'{dataset_root}/map_info.pkl',
             obs_len=20,
             pred_len=30,
+            lane_radius=lane_radius,
         ),
         filters=[],
         transforms=[
             dict(type='ObjectRangeFilter', obj_radius=obj_radius),
-            dict(type='Normlize'),
+            dict(type='Normalize'),
             dict(type='MpredGlobalTransform',
                  rot_range=[-0.17, 0.17], scale_range=[0.9, 1.1]),
             dict(type='MpredMirrorFlip', mirror_prob=0.0, flip_prob=0.5),
@@ -335,14 +338,16 @@ dataloader_train = dict(
 dataloader_eval = _deepcopy(dataloader_train)
 dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/val_info.pkl'
+dataloader_eval['dataset']['load_opt']['traj_path'] = f'{dataset_root}/val_traj.npy'
 dataloader_eval['dataset']['filters'] = []
 dataloader_eval['dataset']['transforms'] = [
     dict(type='ObjectRangeFilter', obj_radius=obj_radius),
-    dict(type='Normlize'),
+    dict(type='Normalize'),
 ]
 
 dataloader_export = _deepcopy(dataloader_eval)
 dataloader_export['dataset']['info_path'] = f'{dataset_root}/test_info.pkl'
+dataloader_export['dataset']['load_opt']['traj_path'] = f'{dataset_root}/test_traj.npy'
 dataloader_export['dataset']['load_opt']['load_anno'] = False
 
 

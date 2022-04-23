@@ -18,18 +18,20 @@ class MMTransCodec(BaseCodec):
             log_target=True, reduction='batchmean')
 
     def encode_data(self, sample, info):
+        obs_len = sample['meta']['obs_len']
 
         # encode agent
-        agent = sample['data']['agent'][0]  # (H, 4)
+        agent = sample['data']['agent'][0, :obs_len]  # (H, 4)
         pos = agent[:, :2]
         delta = pos[:-1] - pos[1:]
         agent = np.concatenate([delta, agent[:-1, 2:]], axis=-1)  # (H-1, 4)
 
         # encode object
-        object = sample['data']['agent'][1:]
+        object = sample['data']['agent'][1:, :obs_len]
         valid_mask = object[:, -1, -1] > 0
         object = object[valid_mask]
-        object = np.concatenate([object[:, :-1, :2], object[:, 1:, :]], axis=-1)  # vectorize
+        object = np.concatenate(
+            [object[:, :-1, :2], object[:, 1:, :]], axis=-1)  # vectorize
         if len(object) > 64:
             object = object[:64]
         object_num = np.array(len(object), dtype=np.int32)  # (H-1, 6)
@@ -40,7 +42,7 @@ class MMTransCodec(BaseCodec):
             [lane[:, :-1, :2], lane[:, 1:, :]], axis=-1)  # vectorize
         if len(lane) > 128:
             lane = lane[:128]
-        lane_num = np.array(len(lane), dtype=np.int32) # (L-1, 7)
+        lane_num = np.array(len(lane), dtype=np.int32)  # (L-1, 7)
 
         sample['input'] = dict(
             agent=torch.from_numpy(agent),
@@ -187,8 +189,11 @@ class MMTransCodec(BaseCodec):
             cm = plt.cm.get_cmap('winter')
             object = sample['input']['object']
             for obj in object:
-                p = obj[:, :2]
-                mask = obj[:, -1] > 0
+                s = obj[:, :2]
+                e = obj[:, 2:4]
+                p = torch.cat([s[:1], e], dim=0)
+                m = F.pad(obj[:,-1], (1,0), value=1)
+                mask = m > 0
                 p = p[mask]
                 plt.scatter(p[:, 0], p[:, 1], s=28, c=cm(c[mask]))
 

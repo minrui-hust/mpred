@@ -21,7 +21,12 @@ dataset = dict(
     ),
     filters=[],
     transforms=[
-        dict(type='Normlize'),
+        dict(type='Normalize'),
+        dict(type='MpredMaskHistory', mask_prob=0.8, max_len=10),
+        dict(type='ObjectRangeFilter', obj_radius=10),
+        dict(type='MpredMirrorFlip', mirror_prob=0, flip_prob=0.5),
+        dict(type='MpredGlobalTransform', translation_std=[
+             0, 0], rot_range=[-0.78539816, 0.78539816], scale_range=[0.5, 2.0]),
     ],
 )
 
@@ -44,16 +49,15 @@ codec = dict(
 
 dataset = FI.create(dataset)
 codec = FI.create(codec)
-#  dataset.codec = codec
+dataset.codec = codec
 
-for i in range(len(dataset)):
-    data = dataset[i]
-    dataset.plot(dataset[i])
+#  for i in range(len(dataset)):
+#      data = dataset[i]
+#      dataset.plot(dataset[i])
 
 dataloader = DataLoader(dataset, batch_size=2,
-                        num_workers=0, collate_fn=codec.get_collater())
+                        num_workers=0, collate_fn=lambda x: x)
 
-#  dataset.plot(dataset[0])
 for batch in tqdm(dataloader):
-    pass
-    #  print(batch)
+    for data in batch:
+        codec.plot(data)
