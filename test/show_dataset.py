@@ -21,7 +21,7 @@ dataset = dict(
     ),
     filters=[],
     transforms=[
-        #  dict(type='Normlize'),
+        dict(type='Normlize'),
     ],
 )
 
