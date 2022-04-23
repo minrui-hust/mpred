@@ -183,7 +183,7 @@ class MMTransCodec(BaseCodec):
                            width=0.4, headwidth=1.8, headlength=1.0, headaxislength=1.5, color='gray', alpha=0.8)
 
             L = sample['meta']['obs_len']
-            c = torch.arange(L) / (L-1)
+            c = np.arange(L) / (L-1)
 
             # plot obj
             cm = plt.cm.get_cmap('winter')
@@ -192,7 +192,7 @@ class MMTransCodec(BaseCodec):
                 s = obj[:, :2]
                 e = obj[:, 2:4]
                 p = torch.cat([s[:1], e], dim=0)
-                m = F.pad(obj[:,-1], (1,0), value=1)
+                m = F.pad(obj[:, -1], (1, 0), value=1)
                 mask = m > 0
                 p = p[mask]
                 plt.scatter(p[:, 0], p[:, 1], s=28, c=cm(c[mask]))
@@ -217,8 +217,8 @@ class MMTransCodec(BaseCodec):
             traj = sample['gt']['traj']
             cm = plt.cm.get_cmap('spring')
             L = sample['meta']['pred_len']
-            c = torch.arange(L) / (L-1)
-            plt.scatter(traj[:, 0], traj[:, 1], s=28, c=cm(c))
+            c = np.arange(L) / (L-1)
+            plt.scatter(traj[:, 0], traj[:, 1], s=16, c=cm(c))
 
         if show_output and 'output' in sample:
             pass

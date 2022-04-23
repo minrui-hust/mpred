@@ -67,7 +67,7 @@ class MpredRetarget(DatasetTransform):
             lanes.extend([ds.lane_dict[city][idx] for idx in indices])
         lanes = np.stack(lanes, axis=0)
 
-        gt_traj = agent[:1, obs_len:, :2]
+        gt_traj = agent[:1, obs_len:, :2].copy()
 
         sample['data']['agent'] = agent
         sample['data']['lane'] = lanes
