@@ -79,15 +79,17 @@ class ObjectRangeFilter(DatasetTransform):
 
 @FI.register
 class MpredMirrorFlip(DatasetTransform):
-    def __init__(self, mirror_prob=0.5, flip_prob=0.5):
+    def __init__(self, mirror_prob=None, flip_prob=None):
         super().__init__()
 
         self.mirror_prob = mirror_prob
         self.flip_prob = flip_prob
 
     def __call__(self, sample, info):
-        self._mirror(sample)
-        self._flip(sample)
+        if self.mirror_prob is not None:
+            self._mirror(sample)
+        if self.flip_prob is not None:
+            self._flip(sample)
 
     def _mirror(self, sample):
         if self.mirror_prob < np.random.rand():
@@ -118,17 +120,22 @@ class MpredMirrorFlip(DatasetTransform):
 
 @FI.register
 class MpredGlobalTransform(DatasetTransform):
-    def __init__(self, translation_std=[0, 0], rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]):
+    def __init__(self, translation_std=None, rot_range=None, scale_range=None):
         super().__init__()
 
-        self.translation_std = np.array(translation_std, dtype=np.float32)
+        self.translation_std = None
+        if translation_std is not None:
+            self.translation_std = np.array(translation_std, dtype=np.float32)
         self.rot_range = rot_range
         self.scale_range = scale_range
 
     def __call__(self, sample, info):
-        self._scale(sample)
-        self._rotate(sample)
-        self._translate(sample)
+        if self.scale_range is not None:
+            self._scale(sample)
+        if self.rot_range is not None:
+            self._rotate(sample)
+        if self.translation_std is not None:
+            self._translate(sample)
 
     def _scale(self, sample):
         scale_factor = np.random.uniform(

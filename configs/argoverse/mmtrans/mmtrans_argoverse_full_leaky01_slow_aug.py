@@ -327,9 +327,8 @@ dataloader_train = dict(
         transforms=[
             dict(type='ObjectRangeFilter', obj_radius=obj_radius),
             dict(type='Normalize'),
-            dict(type='MpredGlobalTransform',
-                 rot_range=[-0.17, 0.17], scale_range=[0.9, 1.1]),
-            dict(type='MpredMirrorFlip', mirror_prob=0.0, flip_prob=0.5),
+            dict(type='MpredGlobalTransform', scale_range=[0.85, 1.17]),
+            dict(type='MpredMirrorFlip', flip_prob=0.5),
             dict(type='MpredMaskHistory', mask_prob=0.8, max_len=10),
         ],
     ),
@@ -339,7 +338,6 @@ dataloader_eval = _deepcopy(dataloader_train)
 dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/val_info.pkl'
 dataloader_eval['dataset']['load_opt']['traj_path'] = f'{dataset_root}/val_traj.npy'
-dataloader_eval['dataset']['filters'] = []
 dataloader_eval['dataset']['transforms'] = [
     dict(type='ObjectRangeFilter', obj_radius=obj_radius),
     dict(type='Normalize'),
