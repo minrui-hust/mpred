@@ -60,8 +60,8 @@ class ArgoPredDataset(MPredDataset):
             print(f'Save formatted predictions into {pred_path}')
             generate_forecasting_h5(
                 data=pred_pb['trajs'],
-                output_path=os.path.dirname(pred_path),
-                filename='pred.h5',
+                output_path='/tmp',
+                filename='pred',
                 probabilities=pred_pb['scores'])
 
         # process anno
