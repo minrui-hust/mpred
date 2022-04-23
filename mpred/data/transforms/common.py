@@ -3,7 +3,75 @@ from mai.data.datasets.transform import DatasetTransform
 import numpy as np
 from mdet.core.geometry2d import rotate_points
 
-error_cnt = 0
+
+@FI.register
+class MpredRetarget(DatasetTransform):
+    r'''
+    select another object as prediction target
+    '''
+
+    def __init__(self, prob=0.0, min_len=40, min_dist=0.2):
+        super().__init__()
+        self.prob = prob
+        self.min_len = min_len
+        self.min_dist = min_dist
+
+    def __call__(self, sample, info, ds=None):
+        if self.prob < np.random.rand():
+            return
+
+        city = sample['meta']['city']
+        obs_len = sample['meta']['obs_len']
+        pred_len = sample['meta']['pred_len']
+        lane_radius = sample['meta']['lane_radius']
+        total_len = obs_len + pred_len
+
+        traj = sample['data']['agent'][1:]
+        traj_len = np.sum(traj[..., -1], axis=-1).astype(np.int32)
+        traj_dist = np.linalg.norm(
+            traj[:, obs_len, :2]-traj[:, 0, :2], axis=-1)
+
+        mask = np.logical_and(traj_len >= self.min_len,
+                              traj_dist >= self.min_dist)
+        candi_indice = np.nonzero(mask)[0]
+        if len(candi_indice) <= 0:
+            return
+
+        sel = np.random.randint(len(candi_indice))
+        candi = candi_indice[sel]
+        candi_len = traj_len[candi]
+        st = traj[candi, :, -1].argmax()
+        ed = st+candi_len
+        candi_pos = traj[candi, ed-pred_len, :2]
+
+        lane_ids = ds.am.get_lane_ids_in_xy_bbox(
+            candi_pos[0], candi_pos[1], city, lane_radius)
+        if len(lane_ids) <= 0:
+            return
+
+        # swap selected target to be the first agent
+        agent = sample['data']['agent']
+        ts = agent[..., 2].copy()
+        agent[[0, candi+1]] = agent[[candi+1, 0]]
+
+        pad = total_len-ed
+        if pad > 0:
+            agent = agent[:, :ed, :]
+            agent = np.pad(agent, ((0, 0), (pad, 0), (0, 0)), mode='edge')
+            agent[..., :pad, -1] = 0
+            agent[..., 2] = ts
+
+        lanes = []
+        for id in lane_ids:
+            indices = ds.lane_id2idx[city][id]
+            lanes.extend([ds.lane_dict[city][idx] for idx in indices])
+        lanes = np.stack(lanes, axis=0)
+
+        gt_traj = agent[:1, obs_len:, :2]
+
+        sample['data']['agent'] = agent
+        sample['data']['lane'] = lanes
+        sample['anno'].trajs = gt_traj
 
 
 @FI.register
@@ -11,7 +79,7 @@ class Normalize(DatasetTransform):
     def __init__(self, center=True, orient=True):
         super().__init__()
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds=None):
         obs_len = sample['meta']['obs_len']
         agent = sample['data']['agent']
         lane = sample['data']['lane']
@@ -48,7 +116,7 @@ class MpredMaskHistory(DatasetTransform):
         self.mask_prob = mask_prob
         self.max_len = max_len
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds=None):
         agent = sample['data']['agent']
         mask = np.random.rand(agent.shape[0]) < self.mask_prob
         mask_len = np.random.randint(self.max_len+1, size=agent.shape[0])
@@ -65,7 +133,7 @@ class ObjectRangeFilter(DatasetTransform):
         super().__init__()
         self.obj_radius = obj_radius
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds=None):
         obs_len = sample['meta']['obs_len']
 
         agent = sample['data']['agent']
@@ -85,7 +153,7 @@ class MpredMirrorFlip(DatasetTransform):
         self.mirror_prob = mirror_prob
         self.flip_prob = flip_prob
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds=None):
         if self.mirror_prob is not None:
             self._mirror(sample)
         if self.flip_prob is not None:
@@ -129,7 +197,7 @@ class MpredGlobalTransform(DatasetTransform):
         self.rot_range = rot_range
         self.scale_range = scale_range
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds=None):
         if self.scale_range is not None:
             self._scale(sample)
         if self.rot_range is not None:
