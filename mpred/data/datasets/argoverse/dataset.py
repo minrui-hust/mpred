@@ -3,6 +3,8 @@ from mai.utils import io
 import numpy as np
 import os
 
+from torch.distributed import get_rank
+
 from mpred.data.datasets.mpred_dataset import MPredDataset
 from mpred.core.annotation_pred import AnnotationTrajPred
 
@@ -66,7 +68,7 @@ class ArgoPredDataset(MPredDataset):
             generate_forecasting_h5(
                 data=pred_pb['trajs'],
                 output_path='/tmp',
-                filename='pred',
+                filename=f'pred.{get_rank()}',
                 probabilities=pred_pb['scores'])
 
         # process anno
