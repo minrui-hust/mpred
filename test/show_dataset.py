@@ -23,10 +23,10 @@ dataset = dict(
     transforms=[
         dict(type='MpredRetarget', prob=0.5, min_len=40, min_dist=1.0),
         dict(type='Normalize'),
-        dict(type='MpredMaskHistory', mask_prob=0.8, max_len=10),
-        dict(type='ObjectRangeFilter', obj_radius=50),
-        dict(type='MpredMirrorFlip', flip_prob=0.5),
-        dict(type='MpredGlobalTransform', scale_range=[0.5, 2.0]),
+        #  dict(type='MpredMaskHistory', mask_prob=0.8, max_len=10),
+        #  dict(type='ObjectRangeFilter', obj_radius=50),
+        #  dict(type='MpredMirrorFlip', flip_prob=0.5),
+        #  dict(type='MpredGlobalTransform', scale_range=[0.5, 2.0]),
     ],
 )
 

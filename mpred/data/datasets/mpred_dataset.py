@@ -1,7 +1,9 @@
 from mai.data.datasets import BaseDataset
 import numpy as np
+from mai.utils import FI
 
 
+@FI.register
 class MPredDataset(BaseDataset):
     def __init__(self, info_path, load_opt={}, filters=[], transforms=[], codec=None):
         super().__init__(info_path, filters, transforms, codec)
@@ -24,17 +26,17 @@ class MPredDataset(BaseDataset):
     def load_anno(self, sample, info):
         raise NotImplementedError
 
-    def plot(self, sample, show_data=True, show_anno=True, show_pred=False):
+    @classmethod
+    def plot(cls, sample, show_data=True, show_anno=True, show_pred=False):
         r'''
         plot standard prediction sample
         '''
 
         import matplotlib.pyplot as plt
 
+        plt.title(str(sample['meta']['sample_id']).zfill(6))
         plt.axes().set_aspect('equal')
         plt.grid()
-
-        print(sample['meta']['sample_id'])
 
         if show_data and 'data' in sample:
             # plot lane

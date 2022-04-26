@@ -116,7 +116,7 @@ class MMTransCodec(BaseCodec):
             pred_traj, gt_traj, delta=self.loss_cfg['delta'])
 
         gt_score = F.one_hot(min_idx, K).float()
-        pred_score = F.sigmoid(output['score'].squeeze(-1))  # B, K
+        pred_score = torch.sigmoid(output['score'].squeeze(-1))  # B, K
         score_loss = F.cross_entropy(pred_score, gt_score)
 
         loss = self.loss_cfg['wgt']['traj'] * traj_loss + \
@@ -162,7 +162,8 @@ class MMTransCodec(BaseCodec):
 
         return Collator(rules=rules)
 
-    def plot(self, sample,
+    @classmethod
+    def plot(cls, sample,
              show_input=True,
              show_gt=True,
              show_output=False,
