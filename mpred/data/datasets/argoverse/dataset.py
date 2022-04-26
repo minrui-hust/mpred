@@ -32,7 +32,7 @@ class ArgoPredDataset(MPredDataset):
         agent = self.trajs[traj_index[0]:traj_index[1]].copy()
 
         city = info['city']
-        agent_pos = agent[0, self.load_opt['obs_len'], :2]
+        agent_pos = agent[0, self.load_opt['obs_len']-1, :2]
 
         lane_ids = self.am.get_lane_ids_in_xy_bbox(
             agent_pos[0], agent_pos[1], city, self.load_opt['lane_radius'])

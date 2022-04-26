@@ -29,7 +29,7 @@ class MpredRetarget(DatasetTransform):
         traj = sample['data']['agent'][1:]
         traj_len = np.sum(traj[..., -1], axis=-1).astype(np.int32)
         traj_dist = np.linalg.norm(
-            traj[:, obs_len, :2]-traj[:, 0, :2], axis=-1)
+            traj[:, obs_len-1, :2]-traj[:, 0, :2], axis=-1)
 
         mask = np.logical_and(traj_len >= self.min_len,
                               traj_dist >= self.min_dist)
@@ -137,7 +137,7 @@ class ObjectRangeFilter(DatasetTransform):
         obs_len = sample['meta']['obs_len']
 
         agent = sample['data']['agent']
-        agent_pos = agent[:, obs_len, :2]
+        agent_pos = agent[:, obs_len-1, :2]
 
         object_dist = np.linalg.norm(agent_pos - agent_pos[0], axis=-1)
         valid_mask = object_dist <= self.obj_radius
