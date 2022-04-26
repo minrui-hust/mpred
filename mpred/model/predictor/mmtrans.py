@@ -32,6 +32,7 @@ class MMTrans(BaseModule):
         self.lane_enable = hparam['lane_enable']
         self.object_enable = hparam['object_enable']
         self.output_stage = hparam['output_stage']
+        self.additional_fusion = hparam.get('additional_fusion', False)
         self.freeze_agent = freeze_agent
         self.freeze_lane = freeze_lane
         model_dim = hparam['model_dim']
@@ -60,6 +61,9 @@ class MMTrans(BaseModule):
             self.object_enc = FI.create(object_enc)
             self.object_dec = FI.create(object_dec)
             self.object_head = FI.create(head)
+
+        if self.additional_fusion:
+            self.additional_lane_dec = FI.create(lane_dec)
 
         self.query = nn.Embedding(K, model_dim)
 
@@ -120,6 +124,9 @@ class MMTrans(BaseModule):
             object = self.object_emb(object)
             object = self.object_enc(object, mask=object_mask)
             object_out = self.object_dec(lane_out, object, mask=object_mask)
+            if self.additional_fusion:
+                object_out = self.additional_lane_dec(
+                    object_out, lane, mask=lane_mask)
             object_head_out = self.object_head(object_out)
 
         if self.output_stage == 'agent':
