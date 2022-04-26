@@ -34,6 +34,8 @@ class MPredDataset(BaseDataset):
 
         import matplotlib.pyplot as plt
 
+        print(sample['meta'])
+
         plt.title(str(sample['meta']['sample_id']).zfill(6))
         plt.axes().set_aspect('equal')
         plt.grid()

@@ -27,12 +27,20 @@ class MpredRetarget(DatasetTransform):
         total_len = obs_len + pred_len
 
         traj = sample['data']['agent'][1:]
-        traj_len = np.sum(traj[..., -1], axis=-1).astype(np.int32)
+        traj_valid_len = np.sum(traj[..., -1], axis=-1).astype(np.int32)
         traj_dist = np.linalg.norm(
             traj[:, obs_len-1, :2]-traj[:, 0, :2], axis=-1)
 
-        mask = np.logical_and(traj_len >= self.min_len,
+        traj_len = []
+        for m in traj[..., -1]:
+            indice = np.nonzero(m)[0]
+            st, ed = indice[0], indice[-1]
+            traj_len.append(ed-st+1)
+        traj_len = np.array(traj_len, dtype=np.int32)
+
+        mask = np.logical_and(traj_valid_len >= self.min_len,
                               traj_dist >= self.min_dist)
+        mask = np.logical_and(mask, traj_valid_len == traj_len)
         candi_indice = np.nonzero(mask)[0]
         if len(candi_indice) <= 0:
             return
