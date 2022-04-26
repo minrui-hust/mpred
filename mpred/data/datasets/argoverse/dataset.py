@@ -25,6 +25,7 @@ class ArgoPredDataset(MPredDataset):
                               obs_len=self.load_opt['obs_len'],
                               pred_len=self.load_opt['pred_len'],
                               lane_radius=self.load_opt['lane_radius'],
+                              target_id=0,
                               )
 
     def load_data(self, sample, info):

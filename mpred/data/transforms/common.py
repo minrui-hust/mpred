@@ -72,6 +72,7 @@ class MpredRetarget(DatasetTransform):
         sample['data']['agent'] = agent
         sample['data']['lane'] = lanes
         sample['anno'].trajs = gt_traj
+        sample['meta']['target_id'] = candi+1
 
 
 @FI.register
