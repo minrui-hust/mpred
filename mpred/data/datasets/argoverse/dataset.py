@@ -51,7 +51,8 @@ class ArgoPredDataset(MPredDataset):
                                self.load_opt['obs_len']:, :2].copy()
         sample['anno'] = AnnotationTrajPred(trajs=pred_traj)
 
-    def format(self, sample_list, pred_path=None, gt_path=None):
+    @classmethod
+    def format(cls, sample_list, pred_path=None, gt_path=None):
         if not (pred_path is None and gt_path is None):
             meta_list = [sample['meta'] for sample in sample_list]
 
@@ -59,7 +60,7 @@ class ArgoPredDataset(MPredDataset):
         if pred_path is not None:
             print('Formatting predictions...')
             pred_list = [sample['pred'] for sample in sample_list]
-            pred_pb = self._format_anno_list(pred_list, meta_list)
+            pred_pb = cls._format_anno_list(pred_list, meta_list)
             io.dump(pred_pb, pred_path, format='pkl')
             print(f'Save formatted predictions into {pred_path}')
             generate_forecasting_h5(
@@ -72,13 +73,14 @@ class ArgoPredDataset(MPredDataset):
         if gt_path is not None:
             print('Formatting groundtruth...')
             gt_list = [sample['anno'] for sample in sample_list]
-            gt_pb = self._format_anno_list(gt_list, meta_list)
+            gt_pb = cls._format_anno_list(gt_list, meta_list)
             io.dump(gt_pb, gt_path, format='pkl')
             print(f'Save formatted groundtruth into {gt_path}')
 
         return pred_path, gt_path
 
-    def _format_anno_list(self, anno_list, meta_list):
+    @classmethod
+    def _format_anno_list(cls, anno_list, meta_list):
         from mai.core.geometry2d import rotate_points
         trajs = {}
         scores = {}
@@ -104,7 +106,8 @@ class ArgoPredDataset(MPredDataset):
 
         return dict(trajs=trajs, scores=scores)
 
-    def evaluate(self, predict_path, gt_path=None):
+    @classmethod
+    def evaluate(cls, predict_path, gt_path=None):
         from .utils import compute_forecasting_metrics
 
         pred = io.load(predict_path, format='pkl')
