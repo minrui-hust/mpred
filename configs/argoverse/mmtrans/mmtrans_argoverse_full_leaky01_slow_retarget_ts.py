@@ -292,6 +292,7 @@ codec_train = dict(
     encode_cfg=dict(
         encode_data=True,
         encode_anno=True,
+        encode_time_shifted=True,
     ),
     decode_cfg=dict(),
     loss_cfg=dict(
