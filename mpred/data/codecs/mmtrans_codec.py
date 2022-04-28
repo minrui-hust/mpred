@@ -91,7 +91,7 @@ class MMTransCodec(BaseCodec):
 
         # shift object
         object = sample['data']['agent'][1:, 1:obs_len+1].copy()
-        object[..., 2] = object[..., 2] - object[:, 0, 2]  # timestamp
+        object[..., 2] = object[..., 2] - object[:, [0], 2]  # timestamp
         object[..., :2] = rotate_points(object[..., :2]-agent_pos, agent_rot)
         valid_mask = object[:, -1, -1] > 0
         object = object[valid_mask]
@@ -210,7 +210,7 @@ class MMTransCodec(BaseCodec):
             min_indice = torch.min(torch.norm(raw_endpoint_expand -
                                               shift_endpoint_expand, dim=-1), dim=-1)[1]
 
-            shift_traj = torch.gather(shift_traj, 1, min_indice.unsqueeze(-1))
+            shift_traj = torch.gather(shift_traj, 1, min_indice.view(B, K, 1, 1))
 
             tc_loss = F.huber_loss(raw_traj, shift_traj,
                                    delta=self.loss_cfg['delta'])
