@@ -66,6 +66,7 @@ class MMTransCodec(BaseCodec):
         obs_len = sample['meta']['obs_len']
 
         agent = sample['data']['agent'][0, 1:obs_len+1].copy()  # (H, 4)
+        agent[:, 2] = agent[:, 2] - agent[0, 2]  # timestamp
 
         # norm
         agent_pos = agent[-1, :2].copy()
@@ -80,8 +81,8 @@ class MMTransCodec(BaseCodec):
                 break
             valid_last_id -= 1
         agent_rot[1] = -agent_rot[1]
-        agent_rotm = np.array([[agent_rot[0], agent_rot[1]],
-                               [-agent_rot[1], agent_rot[0]]], dtype=np.float32)
+        agent_rotm = np.array([[agent_rot[0], -agent_rot[1]],
+                               [agent_rot[1], agent_rot[0]]], dtype=np.float32)
 
         # shifted agent
         agent[:, :2] = rotate_points(agent[:, :2]-agent_pos, agent_rot)
@@ -90,6 +91,7 @@ class MMTransCodec(BaseCodec):
 
         # shift object
         object = sample['data']['agent'][1:, 1:obs_len+1].copy()
+        object[..., 2] = object[..., 2] - object[:, 0, 2]  # timestamp
         object[..., :2] = rotate_points(object[..., :2]-agent_pos, agent_rot)
         valid_mask = object[:, -1, -1] > 0
         object = object[valid_mask]
@@ -196,7 +198,21 @@ class MMTransCodec(BaseCodec):
 
             raw_traj = pred_traj[:, :, 1:, :]
             shift_traj = time_shifted_traj[:, :, :-1, :]
-            tc_loss = F.huber_loss(shift_traj, raw_traj,
+
+            raw_endpoint = raw_traj[:, :, -1, :].detach()  # (B, K, 2)
+            shift_endpoint = shift_traj[:, :, -1, :].detach()  # (B, K, 2)
+
+            # do match
+            raw_endpoint_expand = raw_endpoint.view(
+                B, K, 1, 2).expand(-1, -1, K, -1)
+            shift_endpoint_expand = shift_endpoint.view(
+                B, 1, K, 2).expand(-1, K, -1, -1)
+            min_indice = torch.min(torch.norm(raw_endpoint_expand -
+                                              shift_endpoint_expand, dim=-1), dim=-1)[1]
+
+            shift_traj = torch.gather(shift_traj, 1, min_indice.unsqueeze(-1))
+
+            tc_loss = F.huber_loss(raw_traj, shift_traj,
                                    delta=self.loss_cfg['delta'])
             loss = loss + self.loss_cfg['wgt']['traj'] * tc_loss
             loss_dict['tc_loss'] = tc_loss

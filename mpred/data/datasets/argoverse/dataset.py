@@ -65,11 +65,11 @@ class ArgoPredDataset(MPredDataset):
             pred_pb = cls._format_anno_list(pred_list, meta_list)
             io.dump(pred_pb, pred_path, format='pkl')
             print(f'Save formatted predictions into {pred_path}')
-            generate_forecasting_h5(
-                data=pred_pb['trajs'],
-                output_path='/tmp',
-                filename=f'pred.{get_rank()}',
-                probabilities=pred_pb['scores'])
+            #  generate_forecasting_h5(
+            #      data=pred_pb['trajs'],
+            #      output_path='/tmp',
+            #      filename=f'pred.{get_rank()}',
+            #      probabilities=pred_pb['scores'])
 
         # process anno
         if gt_path is not None:
