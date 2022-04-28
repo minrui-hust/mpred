@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from mpred.core.annotation_pred import AnnotationTrajPred
 from functools import partial
 from mai.utils.misc import is_nan_or_inf
+from mdet.core.geometry2d import rotate_points
 
 
 @FI.register
@@ -52,10 +53,69 @@ class MMTransCodec(BaseCodec):
             lane_num=torch.from_numpy(lane_num),
         )
 
+        if self.encode_cfg.get('encode_time_shifted', False):
+            self.encode_time_shifted(sample, info)
+
     def encode_anno(self, sample, info):
         traj = sample['anno'].trajs[0]
         sample['gt'] = dict(
             traj=torch.from_numpy(traj),
+        )
+
+    def encode_time_shifted(self, sample, info):
+        obs_len = sample['meta']['obs_len']
+
+        agent = sample['data']['agent'][0, 1:obs_len+1].copy()  # (H, 4)
+
+        # norm
+        agent_pos = agent[-1, :2].copy()
+        valid_last_id = obs_len-2
+        agent_rot = np.array([1, 0], dtype=np.float32)
+        while valid_last_id >= 0:
+            agent_pos_last = agent[valid_last_id, :2]
+            delta = agent_pos - agent_pos_last
+            delta_norm = np.linalg.norm(delta)
+            if delta_norm > 1e-6:
+                agent_rot = delta / delta_norm
+                break
+            valid_last_id -= 1
+        agent_rot[1] = -agent_rot[1]
+        agent_rotm = np.array([[agent_rot[0], agent_rot[1]],
+                               [-agent_rot[1], agent_rot[0]]], dtype=np.float32)
+
+        # shifted agent
+        agent[:, :2] = rotate_points(agent[:, :2]-agent_pos, agent_rot)
+        delta = agent[:-1, :2] - agent[1:, :2]
+        agent = np.concatenate([delta, agent[:-1, 2:]], axis=-1)  # (H-1, 4)
+
+        # shift object
+        object = sample['data']['agent'][1:, 1:obs_len+1].copy()
+        object[..., :2] = rotate_points(object[..., :2]-agent_pos, agent_rot)
+        valid_mask = object[:, -1, -1] > 0
+        object = object[valid_mask]
+        object = np.concatenate(
+            [object[:, :-1, :2], object[:, 1:, :]], axis=-1)  # vectorize
+        if len(object) > 64:
+            object = object[:64]
+        object_num = np.array(len(object), dtype=np.int32)  # (H-1, 6)
+
+        # shift lane
+        lane = sample['data']['lane'].copy()
+        lane[..., :2] = rotate_points(lane[..., :2]-agent_pos, agent_rot)
+        lane = np.concatenate(
+            [lane[:, :-1, :2], lane[:, 1:, :]], axis=-1)  # vectorize
+        if len(lane) > 128:
+            lane = lane[:128]
+        lane_num = np.array(len(lane), dtype=np.int32)  # (L-1, 7)
+
+        sample['time_shifted_input'] = dict(
+            agent=torch.from_numpy(agent),
+            object=torch.from_numpy(object),
+            lane=torch.from_numpy(lane),
+            object_num=torch.from_numpy(object_num),
+            lane_num=torch.from_numpy(lane_num),
+            norm_center=torch.from_numpy(agent_pos),
+            norm_rotm=torch.from_numpy(agent_rotm),
         )
 
     def decode_eval(self, output, batch=None):
@@ -109,11 +169,11 @@ class MMTransCodec(BaseCodec):
             pred_traj[:, :, -1, :] - gt_traj[:, :, -1, :], dim=-1)
         min_idx = torch.min(traj_dist, dim=-1)[1]
 
-        pred_traj = torch.gather(pred_traj, 1, min_idx.view(
+        winner_traj = torch.gather(pred_traj, 1, min_idx.view(
             min_idx.shape[0], 1, 1, 1).expand(-1, -1, pred_traj.shape[2], pred_traj.shape[3]))
 
-        traj_loss = F.huber_loss(
-            pred_traj, gt_traj, delta=self.loss_cfg['delta'])
+        traj_loss = F.huber_loss(winner_traj, gt_traj,
+                                 delta=self.loss_cfg['delta'])
 
         gt_score = F.one_hot(min_idx, K).float()
         pred_score = torch.sigmoid(output['score'].squeeze(-1))  # B, K
@@ -123,6 +183,23 @@ class MMTransCodec(BaseCodec):
             self.loss_cfg['wgt']['score'] * score_loss
 
         loss_dict = dict(loss=loss, traj_loss=traj_loss, score_loss=score_loss)
+
+        if 'tc' in self.loss_cfg['wgt'] and 'time_shifted_traj' in output:
+            # calc time consistency loss
+            norm_center = batch['time_shifted_input']['norm_center'].view(
+                B, 1, 1, 2)
+            norm_rotm = batch['time_shifted_input']['norm_rotm'].view(
+                B, 1, 2, 2)
+            time_shifted_traj = output['time_shifted_traj'].view(B, K, L, 2)
+            time_shifted_traj = torch.matmul(
+                time_shifted_traj, norm_rotm) + norm_center
+
+            raw_traj = pred_traj[:, :, 1:, :]
+            shift_traj = time_shifted_traj[:, :, :-1, :]
+            tc_loss = F.huber_loss(shift_traj, raw_traj,
+                                   delta=self.loss_cfg['delta'])
+            loss = loss + self.loss_cfg['wgt']['traj'] * tc_loss
+            loss_dict['tc_loss'] = tc_loss
 
         return loss_dict
 
@@ -148,6 +225,15 @@ class MMTransCodec(BaseCodec):
             '.input.object': dict(type='stack', pad_func=partial(pad_func, size=64)),
             '.input.object_num': dict(type='stack'),
             '.input.lane_num': dict(type='stack'),
+
+            # rules for time shifted input
+            '.time_shifted_input.agent': dict(type='stack'),
+            '.time_shifted_input.lane': dict(type='stack', pad_func=partial(pad_func, size=128)),
+            '.time_shifted_input.object': dict(type='stack', pad_func=partial(pad_func, size=64)),
+            '.time_shifted_input.object_num': dict(type='stack'),
+            '.time_shifted_input.lane_num': dict(type='stack'),
+            '.time_shifted_input.norm_center': dict(type='stack'),
+            '.time_shifted_input.norm_rotm': dict(type='stack'),
 
             # rules for gt
             '.gt.traj': dict(type='stack'),

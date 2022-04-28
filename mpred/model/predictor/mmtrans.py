@@ -33,6 +33,7 @@ class MMTrans(BaseModule):
         self.object_enable = hparam['object_enable']
         self.output_stage = hparam['output_stage']
         self.additional_fusion = hparam.get('additional_fusion', False)
+        self.time_shift_enable = hparam.get('time_shift_enable', False)
         self.freeze_agent = freeze_agent
         self.freeze_lane = freeze_lane
         model_dim = hparam['model_dim']
@@ -89,12 +90,12 @@ class MMTrans(BaseModule):
             self.lane_enc.freeze()
             self.lane_dec.freeze()
 
-    def forward_train(self, batch):
-        agent = batch['input']['agent']  # (B, 19, 4)
-        object = batch['input']['object']  # (B, O, 19, 4)
-        lane = batch['input']['lane']  # (B, L, 15, 7)
-        object_num = batch['input']['object_num']  # (B)
-        lane_num = batch['input']['lane_num']  # (B)
+    def forward_input(self, input):
+        agent = input['agent']  # (B, 19, 4)
+        object = input['object']  # (B, O, 19, 4)
+        lane = input['lane']  # (B, L, 15, 7)
+        object_num = input['object_num']  # (B)
+        lane_num = input['lane_num']  # (B)
 
         # batch_size, max_agent_num, max_lane_num
         B, O, L, K = agent.shape[0], object.shape[1], lane.shape[1], self.hparam['num_queries']
@@ -137,6 +138,13 @@ class MMTrans(BaseModule):
             return object_head_out
         else:
             raise NotImplementedError
+
+    def forward_train(self, batch):
+        out = self.forward_input(batch['input'])
+        if self.time_shift_enable and 'time_shifted_input' in batch:
+            time_shifted_out = self.forward_input(batch['time_shifted_input'])
+            out['time_shifted_traj'] = time_shifted_out['traj']
+        return out
 
     def forward_export(self, agent, lane, object, object_num, lane_num):
         # batch_size, max_agent_num, max_lane_num
