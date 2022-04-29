@@ -108,7 +108,8 @@ class MMTrans(BaseModule):
         agent = self.agent_pos_enc(agent)
         agent = self.agent_enc(agent)
         agent_out = self.agent_dec(query_batches, agent)
-        agent_head_out = self.agent_head(agent_out)
+        if self.output_stage == 'agent':
+            agent_head_out = self.agent_head(agent_out)
 
         # fusion lane
         if self.lane_enable:
@@ -117,7 +118,8 @@ class MMTrans(BaseModule):
             lane = self.lane_emb(lane)  # (B, L, model_dim)
             lane = self.lane_enc(lane, mask=lane_mask)  # (B, L, model_dim)
             lane_out = self.lane_dec(agent_out, lane, mask=lane_mask)
-            lane_head_out = self.lane_head(lane_out)
+            if self.output_stage == 'lane':
+                lane_head_out = self.lane_head(lane_out)
 
         if self.object_enable:
             object_mask = construct_mask(object_num, O, inverse=True)
@@ -128,7 +130,8 @@ class MMTrans(BaseModule):
             if self.additional_fusion:
                 object_out = self.additional_lane_dec(
                     object_out, lane, mask=lane_mask)
-            object_head_out = self.object_head(object_out)
+            if self.output_stage == 'object':
+                object_head_out = self.object_head(object_out)
 
         if self.output_stage == 'agent':
             return agent_head_out
