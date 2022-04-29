@@ -312,11 +312,13 @@ codec_export = _deepcopy(codec_eval)
 codec_export['encode_cfg']['encode_anno'] = False
 
 
-dataloader_train = dict(
-    batch_size=batch_size,
-    num_workers=num_workers,
-    shuffle=True,
-    pin_memory=False,
+data_train = dict(
+    dataloader=dict(
+        batch_size=batch_size,
+        num_workers=num_workers,
+        shuffle=True,
+        pin_memory=False,
+    ),
     dataset=dict(
         type='ArgoPredDataset',
         info_path=f'{dataset_root}/train_info.pkl',
@@ -339,19 +341,19 @@ dataloader_train = dict(
     ),
 )
 
-dataloader_eval = _deepcopy(dataloader_train)
-dataloader_eval['shuffle'] = False
-dataloader_eval['dataset']['info_path'] = f'{dataset_root}/val_info.pkl'
-dataloader_eval['dataset']['load_opt']['traj_path'] = f'{dataset_root}/val_traj.npy'
-dataloader_eval['dataset']['transforms'] = [
+data_eval = _deepcopy(data_train)
+data_eval['dataloader']['shuffle'] = False
+data_eval['dataset']['info_path'] = f'{dataset_root}/val_info.pkl'
+data_eval['dataset']['load_opt']['traj_path'] = f'{dataset_root}/val_traj.npy'
+data_eval['dataset']['transforms'] = [
     dict(type='ObjectRangeFilter', obj_radius=obj_radius),
     dict(type='Normalize'),
 ]
 
-dataloader_export = _deepcopy(dataloader_eval)
-dataloader_export['dataset']['info_path'] = f'{dataset_root}/test_info.pkl'
-dataloader_export['dataset']['load_opt']['traj_path'] = f'{dataset_root}/test_traj.npy'
-dataloader_export['dataset']['load_opt']['load_anno'] = False
+data_export = _deepcopy(data_eval)
+data_export['dataset']['info_path'] = f'{dataset_root}/test_info.pkl'
+data_export['dataset']['load_opt']['traj_path'] = f'{dataset_root}/test_traj.npy'
+data_export['dataset']['load_opt']['load_anno'] = False
 
 
 # fit config
@@ -403,7 +405,7 @@ codec = dict(
 )
 
 data = dict(
-    train=dataloader_train,
-    eval=dataloader_eval,
-    export=dataloader_export,
+    train=data_train,
+    eval=data_eval,
+    export=data_export,
 )
