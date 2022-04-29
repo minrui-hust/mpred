@@ -63,8 +63,8 @@ class ArgoPredDataset(MPredDataset):
             print('Formatting predictions...')
             pred_list = [sample['pred'] for sample in sample_list]
             pred_pb = cls._format_anno_list(pred_list, meta_list)
+            print(f'Saving formatted predictions into {pred_path}')
             io.dump(pred_pb, pred_path, format='pkl')
-            print(f'Save formatted predictions into {pred_path}')
             #  generate_forecasting_h5(
             #      data=pred_pb['trajs'],
             #      output_path='/tmp',
@@ -76,8 +76,8 @@ class ArgoPredDataset(MPredDataset):
             print('Formatting groundtruth...')
             gt_list = [sample['anno'] for sample in sample_list]
             gt_pb = cls._format_anno_list(gt_list, meta_list)
+            print(f'Saving formatted groundtruth into {gt_path}')
             io.dump(gt_pb, gt_path, format='pkl')
-            print(f'Save formatted groundtruth into {gt_path}')
 
         return pred_path, gt_path
 

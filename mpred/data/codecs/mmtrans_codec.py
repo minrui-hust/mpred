@@ -210,7 +210,8 @@ class MMTransCodec(BaseCodec):
             min_indice = torch.min(torch.norm(raw_endpoint_expand -
                                               shift_endpoint_expand, dim=-1), dim=-1)[1]
 
-            shift_traj = torch.gather(shift_traj, 1, min_indice.view(B, K, 1, 1))
+            shift_traj = torch.gather(shift_traj, 1, min_indice.view(
+                B, K, 1, 1).expand(-1, -1, L-1, 2))
 
             tc_loss = F.huber_loss(raw_traj, shift_traj,
                                    delta=self.loss_cfg['delta'])
