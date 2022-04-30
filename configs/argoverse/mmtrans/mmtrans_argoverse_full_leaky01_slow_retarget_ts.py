@@ -10,7 +10,7 @@ dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
 ############################
-output_stage = 'object'
+output_stage = ['agent', 'lane', 'object']
 lane_enable = True
 object_enable = True
 model_dim = 128
