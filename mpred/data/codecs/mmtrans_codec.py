@@ -158,65 +158,76 @@ class MMTransCodec(BaseCodec):
                 trajs=traj.numpy(), scores=score.numpy()))
         return pred_list
 
-    def loss(self, output, batch):
-        pred_traj = output['traj']
-        B, K, L = pred_traj.shape[0], pred_traj.shape[1], int(
-            pred_traj.shape[2]/2)
+    def loss(self, out, batch):
+        loss = 0
+        loss_dict = {}
+        output = out['output']
+        for stage_name, stage_output in output.items():
+            pred_traj = stage_output['traj']
+            B, K, L = pred_traj.shape[0], pred_traj.shape[1], int(
+                pred_traj.shape[2]/2)
 
-        pred_traj = pred_traj.view(B, K, L, 2)
+            pred_traj = pred_traj.view(B, K, L, 2)
 
-        gt_traj = batch['gt']['traj'].unsqueeze(1)  # B, 1, L, 2
+            gt_traj = batch['gt']['traj'].unsqueeze(1)  # B, 1, L, 2
 
-        traj_dist = torch.linalg.norm(
-            pred_traj[:, :, -1, :] - gt_traj[:, :, -1, :], dim=-1)
-        min_idx = torch.min(traj_dist, dim=-1)[1]
+            traj_dist = torch.linalg.norm(
+                pred_traj[:, :, -1, :] - gt_traj[:, :, -1, :], dim=-1)
+            min_idx = torch.min(traj_dist, dim=-1)[1]
 
-        winner_traj = torch.gather(pred_traj, 1, min_idx.view(
-            min_idx.shape[0], 1, 1, 1).expand(-1, -1, pred_traj.shape[2], pred_traj.shape[3]))
+            winner_traj = torch.gather(pred_traj, 1, min_idx.view(
+                min_idx.shape[0], 1, 1, 1).expand(-1, -1, pred_traj.shape[2], pred_traj.shape[3]))
 
-        traj_loss = F.huber_loss(winner_traj, gt_traj,
-                                 delta=self.loss_cfg['delta'])
+            traj_loss = F.huber_loss(winner_traj, gt_traj,
+                                     delta=self.loss_cfg['delta'])
 
-        gt_score = F.one_hot(min_idx, K).float()
-        pred_score = torch.sigmoid(output['score'].squeeze(-1))  # B, K
-        score_loss = F.cross_entropy(pred_score, gt_score)
+            gt_score = F.one_hot(min_idx, K).float()
+            pred_score = torch.sigmoid(
+                stage_output['score'].squeeze(-1))  # B, K
+            score_loss = F.cross_entropy(pred_score, gt_score)
 
-        loss = self.loss_cfg['wgt']['traj'] * traj_loss + \
-            self.loss_cfg['wgt']['score'] * score_loss
+            loss = loss + self.loss_cfg['wgt']['traj'] * traj_loss + \
+                self.loss_cfg['wgt']['score'] * score_loss
 
-        loss_dict = dict(loss=loss, traj_loss=traj_loss, score_loss=score_loss)
+            loss_dict.update({f'{stage_name}_traj_loss': traj_loss,
+                              f'{stage_name}_score_loss': score_loss})
 
-        if 'tc' in self.loss_cfg['wgt'] and 'time_shifted_traj' in output:
-            # calc time consistency loss
+        if 'tc' in self.loss_cfg['wgt'] and 'time_shifted_output' in out:
+            time_shifted_output = out['time_shifted_output']
             norm_center = batch['time_shifted_input']['norm_center'].view(
                 B, 1, 1, 2)
             norm_rotm = batch['time_shifted_input']['norm_rotm'].view(
                 B, 1, 2, 2)
-            time_shifted_traj = output['time_shifted_traj'].view(B, K, L, 2)
-            time_shifted_traj = torch.matmul(
-                time_shifted_traj, norm_rotm) + norm_center
+            for stage_name, stage_output in time_shifted_output.items():
+                # calc time consistency loss
+                time_shifted_traj = stage_output['traj'].view(B, K, L, 2)
+                time_shifted_traj = torch.matmul(
+                    time_shifted_traj, norm_rotm) + norm_center
 
-            raw_traj = pred_traj[:, :, 1:, :]
-            shift_traj = time_shifted_traj[:, :, :-1, :]
+                raw_traj = output[stage_name]['traj'].view(B, K, L, 2)[
+                    :, :, 1:, :]
+                shift_traj = time_shifted_traj[:, :, :-1, :]
 
-            raw_endpoint = raw_traj[:, :, -1, :].detach()  # (B, K, 2)
-            shift_endpoint = shift_traj[:, :, -1, :].detach()  # (B, K, 2)
+                raw_endpoint = raw_traj[:, :, -1, :].detach()  # (B, K, 2)
+                shift_endpoint = shift_traj[:, :, -1, :].detach()  # (B, K, 2)
 
-            # do match
-            raw_endpoint_expand = raw_endpoint.view(
-                B, K, 1, 2).expand(-1, -1, K, -1)
-            shift_endpoint_expand = shift_endpoint.view(
-                B, 1, K, 2).expand(-1, K, -1, -1)
-            min_indice = torch.min(torch.norm(raw_endpoint_expand -
-                                              shift_endpoint_expand, dim=-1), dim=-1)[1]
+                # do match
+                raw_endpoint_expand = raw_endpoint.view(
+                    B, K, 1, 2).expand(-1, -1, K, -1)
+                shift_endpoint_expand = shift_endpoint.view(
+                    B, 1, K, 2).expand(-1, K, -1, -1)
+                min_indice = torch.min(torch.norm(raw_endpoint_expand -
+                                                  shift_endpoint_expand, dim=-1), dim=-1)[1]
 
-            shift_traj = torch.gather(shift_traj, 1, min_indice.view(
-                B, K, 1, 1).expand(-1, -1, L-1, 2))
+                shift_traj = torch.gather(shift_traj, 1, min_indice.view(
+                    B, K, 1, 1).expand(-1, -1, L-1, 2))
 
-            tc_loss = F.huber_loss(raw_traj, shift_traj,
-                                   delta=self.loss_cfg['delta'])
-            loss = loss + self.loss_cfg['wgt']['traj'] * tc_loss
-            loss_dict['tc_loss'] = tc_loss
+                tc_loss = F.huber_loss(raw_traj, shift_traj,
+                                       delta=self.loss_cfg['delta'])
+                loss = loss + self.loss_cfg['wgt']['traj'] * tc_loss
+                loss_dict[f'{stage_name}_tc_loss'] = tc_loss
+
+        loss_dict['loss'] = loss
 
         return loss_dict
 

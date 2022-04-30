@@ -103,13 +103,16 @@ class MMTrans(BaseModule):
         # (B, K, model_dim)
         query_batches = self.query.weight.unsqueeze(0).expand(B, -1, -1)
 
+        out = {}
+
         # fusion agent
         agent = self.agent_emb(agent)
         agent = self.agent_pos_enc(agent)
         agent = self.agent_enc(agent)
         agent_out = self.agent_dec(query_batches, agent)
-        if self.output_stage == 'agent':
+        if 'agent' in self.output_stage:
             agent_head_out = self.agent_head(agent_out)
+            out['agent'] = agent_head_out
 
         # fusion lane
         if self.lane_enable:
@@ -118,8 +121,9 @@ class MMTrans(BaseModule):
             lane = self.lane_emb(lane)  # (B, L, model_dim)
             lane = self.lane_enc(lane, mask=lane_mask)  # (B, L, model_dim)
             lane_out = self.lane_dec(agent_out, lane, mask=lane_mask)
-            if self.output_stage == 'lane':
+            if 'lane' in self.output_stage:
                 lane_head_out = self.lane_head(lane_out)
+                out['lane'] = lane_head_out
 
         if self.object_enable:
             object_mask = construct_mask(object_num, O, inverse=True)
@@ -130,23 +134,18 @@ class MMTrans(BaseModule):
             if self.additional_fusion:
                 object_out = self.additional_lane_dec(
                     object_out, lane, mask=lane_mask)
-            if self.output_stage == 'object':
+            if 'object' in self.output_stage:
                 object_head_out = self.object_head(object_out)
+                out['object'] = object_head_out
 
-        if self.output_stage == 'agent':
-            return agent_head_out
-        elif self.output_stage == 'lane':
-            return lane_head_out
-        elif self.output_stage == 'object':
-            return object_head_out
-        else:
-            raise NotImplementedError
+        return out
 
     def forward_train(self, batch):
-        out = self.forward_input(batch['input'])
+        out = {}
+        out['output'] = self.forward_input(batch['input'])
         if self.time_shift_enable and 'time_shifted_input' in batch:
-            time_shifted_out = self.forward_input(batch['time_shifted_input'])
-            out['time_shifted_traj'] = time_shifted_out['traj']
+            out['time_shifted_output'] = self.forward_input(
+                batch['time_shifted_input'])
         return out
 
     def forward_export(self, agent, lane, object, object_num, lane_num):
